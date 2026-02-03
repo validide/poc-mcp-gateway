@@ -1,0 +1,96 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.autoSearchPaths": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.indexing": true,
+  "python.analysis.packageIndexDepths": [
+    {
+      "name": "mcp",
+      "depth": 3,
+      "includeAllSymbols": true
+    },
+    {
+      "name": "fastmcp",
+      "depth": 3,
+      "includeAllSymbols": true
+    }
+  ],
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/mcp-servers/jsonplaceholder",
+    "${workspaceFolder}/mcp-servers/filesystem"
+  ],
+  "python.linting.enabled": true,
+  "python.linting.mypyEnabled": true,
+  "python.linting.mypyPath": "${workspaceFolder}/.venv/bin/mypy",
+  "python.linting.mypyArgs": [
+    "--ignore-missing-imports",
+    "--follow-imports=silent",
+    "--show-column-numbers",
+    "--show-error-codes",
+    "--strict",
+    "--warn-unreachable",
+    "--warn-unused-ignores",
+    "--warn-redundant-casts",
+    "--warn-return-any",
+    "--disallow-untyped-defs",
+    "--disallow-untyped-calls",
+    "--disallow-incomplete-defs"
+  ],
+  "python.formatting.provider": "ruff",
+  "python.formatting.blackPath": "${workspaceFolder}/.venv/bin/black",
+  "python.formatting.blackArgs": ["--line-length", "88"],
+  "ruff.path": ["${workspaceFolder}/.venv/bin/ruff"],
+  "ruff.lint.run": "onType",
+  "ruff.format.args": ["--line-length", "88"],
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.ruff": "explicit",
+    "source.organizeImports.ruff": "explicit"
+  },
+  "editor.rulers": [88],
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.venv": true,
+    "**/.ruff_cache": true,
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/*.egg-info": true,
+    "**/.coverage": true,
+    "**/htmlcov": true
+  },
+  "files.watcherExclude": {
+    "**/.venv/**": true,
+    "**/__pycache__/**": true,
+    "**/.ruff_cache/**": true,
+    "**/.mypy_cache/**": true,
+    "**/.pytest_cache/**": true
+  },
+  "search.exclude": {
+    "**/.venv": true,
+    "**/__pycache__": true,
+    "**/.ruff_cache": true,
+    "**/.mypy_cache": true
+  },
+  "docker.showStartPage": false,
+  "docker.composeCommand": "docker compose",
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json": "docker-compose*.yml"
+  },
+  "evenBetterToml.formatter.alignEntries": true,
+  "evenBetterToml.formatter.alignComments": true,
+  "evenBetterToml.formatter.arrayAutoCollapse": true,
+  "evenBetterToml.formatter.arrayAutoExpand": true,
+  "git.ignoreLimitWarning": true,
+  "terminal.integrated.env.linux": {
+    "PYTHONPATH": "${workspaceFolder}"
+  },
+  "terminal.integrated.env.osx": {
+    "PYTHONPATH": "${workspaceFolder}"
+  },
+  "terminal.integrated.env.windows": {
+    "PYTHONPATH": "${workspaceFolder}"
+  }
+}

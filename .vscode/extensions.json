@@ -1,0 +1,46 @@
+{
+  "recommendations": [
+    // Python Development
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+    "ms-python.mypy-type-checker",
+    "tamasfe.even-better-toml",
+    
+    // Docker & Container Development
+    "ms-azuretools.vscode-docker",
+    "ms-vscode-remote.remote-containers",
+    
+    // MCP & AI Development
+    "opencode.opencode",
+    "rooveterinaryinc.roo-cline",
+    
+    // Shell Scripting
+    "timonwong.shellcheck",
+    "foxundermoon.shell-format",
+    
+    // Git & Version Control
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+    
+    // Documentation
+    "yzhang.markdown-all-in-one",
+    "bierner.markdown-mermaid",
+    "unifiedjs.vscode-mdx",
+    
+    // General Productivity
+    "usernamehw.errorlens",
+    "streetsidesoftware.code-spell-checker",
+    "aaron-bond.better-comments",
+    "gruntfuggly.todo-tree",
+    
+    // JSON/YAML Support
+    "redhat.vscode-yaml",
+    "orta.vscode-jest"
+  ],
+  "unwantedRecommendations": [
+    "ms-python.flake8",
+    "ms-python.isort",
+    "ms-python.black-formatter"
+  ]
+}

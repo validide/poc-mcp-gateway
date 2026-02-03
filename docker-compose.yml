@@ -1,0 +1,147 @@
+name: mcp-gateway-demo
+
+services:
+  mcp-gateway:
+    image: ghcr.io/ibm/mcp-context-forge:1.0.0-BETA-2
+    container_name: mcp-gateway
+    restart: unless-stopped
+    ports:
+      - "4444:4444"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4444
+      DATABASE_URL: sqlite:///data/mcp.db
+      MCPGATEWAY_UI_ENABLED: true
+      MCPGATEWAY_ADMIN_API_ENABLED: true
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-demo-jwt-secret-change-in-production}
+      PLATFORM_ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@demo.local}
+      PLATFORM_ADMIN_PASSWORD: ${ADMIN_PASSWORD:-demopass123}
+      PLATFORM_ADMIN_FULL_NAME: ${ADMIN_NAME:-MCP Demo Administrator}
+      AUTH_REQUIRED: true
+      SECURE_COOKIES: false
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - gateway-data:/data
+    networks:
+      - mcp-demo-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4444/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  jsonplaceholder-mcp:
+    build:
+      context: ./mcp-servers/jsonplaceholder
+      dockerfile: Dockerfile
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
+    image: mcp-jsonplaceholder:latest
+    container_name: jsonplaceholder-mcp
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      MCP_TRANSPORT: http
+      MCP_PORT: 8001
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
+    networks:
+      - mcp-demo-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      mcp-gateway:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  filesystem-mcp:
+    build:
+      context: ./mcp-servers/filesystem
+      dockerfile: Dockerfile
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
+    image: mcp-filesystem:latest
+    container_name: filesystem-mcp
+    restart: unless-stopped
+    environment:
+      MCP_BASE_PATH: /home
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - type: bind
+        source: ${HOME}
+        target: /home
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - mcp-demo-network
+    # This runs stdio, so we use the gateway's translate feature
+    # to expose it as SSE
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  filesystem-translate:
+    image: ghcr.io/ibm/mcp-context-forge:1.0.0-BETA-2
+    container_name: filesystem-translate
+    restart: unless-stopped
+    command: >
+      python3 -m mcpgateway.translate
+      --stdio "docker run --rm -i --network mcp-gateway-demo_mcp-demo-network mcp-filesystem:latest"
+      --expose-sse
+      --port 8002
+    ports:
+      - "8002:8002"
+    environment:
+      MCP_TRANSPORT: sse
+      MCP_PORT: 8002
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - mcp-demo-network
+    depends_on:
+      - filesystem-mcp
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+networks:
+  mcp-demo-network:
+    name: mcp-demo-network
+    driver: bridge
+
+volumes:
+  gateway-data:
+    driver: local
