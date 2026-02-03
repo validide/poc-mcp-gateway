@@ -14,8 +14,8 @@ dependencies = [
     "fastmcp>=0.4.0",
 ]
 
-# Development dependencies  
-[dependency-groups]
+# Development dependencies
+[project.optional-dependencies]
 dev = [
     "mypy>=1.8.0",
     "ruff>=0.9.0",
