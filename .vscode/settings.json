@@ -92,5 +92,6 @@
   },
   "terminal.integrated.env.windows": {
     "PYTHONPATH": "${workspaceFolder}"
-  }
+  },
+  "containers.composeCommand": "docker compose"
 }

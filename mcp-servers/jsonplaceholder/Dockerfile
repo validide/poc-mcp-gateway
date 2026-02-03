@@ -1,5 +1,8 @@
 # Build stage with uv for dependency resolution
-FROM ghcr.io/astral-sh/uv:0.6.0 AS builder
+FROM python:3.12-slim-bookworm AS builder
+
+# Install uv tool
+RUN pip install uv
 
 WORKDIR /app
 
@@ -22,19 +25,12 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy server code
 COPY server.py .
 
-# Set PATH to use venv
+# Set path to use venv
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Security: Run as non-root user
 RUN groupadd -r mcp && useradd -r -g mcp mcp
 USER mcp
 
-# Expose port for HTTP transport
-EXPOSE 8001
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" || exit 1
-
-# Run server
+# No exposed ports - uses stdio transport
 CMD ["python", "server.py"]

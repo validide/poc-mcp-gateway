@@ -1,5 +1,8 @@
 # Build stage with uv for dependency resolution
-FROM ghcr.io/astral-sh/uv:0.6.0 AS builder
+FROM python:3.12-slim-bookworm AS builder
+
+# Install uv tool
+RUN pip install uv
 
 WORKDIR /app
 
@@ -22,7 +25,7 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy server code
 COPY server.py .
 
-# Set PATH to use venv
+# Set path to use venv
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Set base path for filesystem operations
