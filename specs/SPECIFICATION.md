@@ -6,17 +6,17 @@ This document describes the complete specification for a Model Context Protocol 
 
 - **IBM MCP Context Forge** as the central gateway
 - **Duende Demo Server** for OAuth 2.1 authentication
-- Two custom MCP backends:
+- Two public MCP backends:
   - HTTP-based MCP fetching data from JSONPlaceholder API
-  - stdio-based Docker MCP for filesystem read-only operations
+  - HTTP-based MCP providing weather data via OpenWeatherMap API
 - A virtual server combining both backends with OAuth 2.1 security
 
 ## 2. Architecture Diagram
 
 ```
                                     +-----------------------------+
-                                    |   OpenCode Desktop / VS     |
-                                    |   Code / ChatGPT Desktop    |
+                                    |   OpenCode Desktop /        |
+                                    |   MCP Inspector             |
                                     +-------------+---------------+
                                                   |
                                                   | Connect to Gateway
@@ -30,9 +30,9 @@ This document describes the complete specification for a Model Context Protocol 
                                         |                               |
                                         v                               v
                               +------------------+           +------------------+
-                              | HTTP MCP Server  |           | stdio MCP Server |
-                              | (JSONPlaceholder)|           | (Docker-based    |
-                              | Port: 8001       |           | Filesystem)      |
+                              | HTTP MCP Server  |           | HTTP MCP Server  |
+                              | (JSONPlaceholder)|           | (Weather)        |
+                              | Port: 8001       |           | Port: 8002       |
                               +------------------+           +------------------+
 ```
 
@@ -83,21 +83,21 @@ This document describes the complete specification for a Model Context Protocol 
 7. `get_albums` - List albums
 8. `get_photos` - List photos from an album
 
-### 3.4 stdio MCP Server (Filesystem)
+### 3.4 HTTP MCP Server (Weather)
 
-**Purpose**: Read-only filesystem operations for demo user
-**Protocol**: stdio (via Docker)
-**Implementation**: Python MCP server in Docker container
+**Purpose**: Provide real-time weather data via OpenWeatherMap API
+**Protocol**: HTTP/SSE
+**Port**: 8002
 
 **Tools Provided**:
-1. `list_directory` - List contents of a directory
-2. `read_file` - Read contents of a file
-3. `get_file_info` - Get metadata about a file/directory
+1. `get_current` - Get current weather for a location
+2. `get_forecast` - Get weather forecast for a location
+3. `search_location` - Search for location coordinates
 
-**Security**:
-- Read-only operations only
-- Access restricted to containerized environment
-- Mounts user home directory read-only
+**API Integration**:
+- Uses OpenWeatherMap API
+- Requires API key (free tier available)
+- Supports multiple units (metric, imperial, standard)
 
 ### 3.5 Virtual Server
 
@@ -107,7 +107,7 @@ This document describes the complete specification for a Model Context Protocol 
 
 **Combined Tools**:
 - All JSONPlaceholder tools (8 tools)
-- All Filesystem tools (3 tools)
+- All Weather tools (3 tools)
 - Total: 11 tools available after OAuth authentication
 
 ## 4. Demo Flow
@@ -120,7 +120,7 @@ This document describes the complete specification for a Model Context Protocol 
    ```
    - Starts MCP Gateway container on port 4444
    - Starts HTTP MCP server container on port 8001
-   - Builds and starts stdio MCP server container
+   - Starts Weather MCP server container on port 8002
    - Initializes gateway with default admin user
 
 2. **Verify Services**:
@@ -139,17 +139,12 @@ This document describes the complete specification for a Model Context Protocol 
   - Protocol: SSE
 - Gateway discovers 8 tools automatically
 
-**Step 2: Register stdio MCP Server**
-- Uses gateway's `translate` feature to expose stdio as SSE:
-  ```bash
-  python3 -m mcpgateway.translate \
-    --stdio "docker run --rm -i mcp-filesystem-stdio" \
-    --expose-sse \
-    --port 8002
-  ```
-- Registers the translated server in gateway:
-  - Name: `filesystem-mcp`
+**Step 2: Register Weather MCP Server**
+- In the **"Gateways"** section, click **"Register Gateway"**
+- Registers new MCP server:
+  - Name: `weather-mcp`
   - URL: `http://host.docker.internal:8002/sse`
+  - Protocol: SSE
 - Gateway discovers 3 tools automatically
 
 ### Phase 3: Virtual Server Creation
@@ -158,7 +153,7 @@ This document describes the complete specification for a Model Context Protocol 
 - User navigates to "Servers" section in Admin UI
 - Creates new virtual server:
   - Name: `demo-combined-server`
-  - Description: "Combined JSONPlaceholder and Filesystem tools"
+  - Description: "Combined JSONPlaceholder and Weather tools"
   - Associated Tools: [select all 11 tools from both backends]
 - Server created with unique UUID
 
@@ -183,14 +178,14 @@ This document describes the complete specification for a Model Context Protocol 
 ### Phase 5: Client Integration
 
 **Step 6: Configure Desktop Client**
-- Use MCP Inspector or configure in OpenCode Desktop/VS Code/ChatGPT Desktop
+- Use MCP Inspector or configure in OpenCode Desktop
 - Server URL: `http://localhost:4444/servers/{uuid}/mcp`
 - Authentication: OAuth flow handled automatically
 
 **Step 7: Test Integration**
 - List available tools (should show all 11)
 - Test JSONPlaceholder tool: `get_users`
-- Test Filesystem tool: `list_directory`
+- Test Weather tool: `get_current` with a city name
 
 ## 5. Implementation Details
 
@@ -208,18 +203,19 @@ This document describes the complete specification for a Model Context Protocol 
 - Error handling for API failures
 ```
 
-### 5.2 stdio MCP Server Implementation
+### 5.2 Weather MCP Server Implementation
 
 **Technology**: Python with FastMCP library
-**File**: `mcp-servers/filesystem/server.py`
+**File**: `mcp-servers/weather/server.py`
 
 ```python
 # Key implementation points:
 - Uses FastMCP framework
-- stdio transport (reads/writes to stdin/stdout)
-- Read-only operations only
-- Containerized with Docker
-- Mounts /home (read-only) for demo user
+- HTTP transport on port 8002
+- Integrates with OpenWeatherMap API
+- Returns structured JSON responses with weather data
+- Error handling for API failures and invalid locations
+- API key management via environment variables
 ```
 
 ### 5.3 Docker Compose Configuration
@@ -229,7 +225,7 @@ This document describes the complete specification for a Model Context Protocol 
 **Services**:
 1. `mcp-gateway` - IBM Context Forge gateway
 2. `jsonplaceholder-mcp` - HTTP MCP server
-3. `filesystem-mcp` - stdio MCP server (via translate wrapper)
+3. `weather-mcp` - HTTP MCP server for weather data
 
 ### 5.4 Startup Script
 
@@ -254,7 +250,7 @@ This document describes the complete specification for a Model Context Protocol 
 
 ### 6.2 Backend Security
 - HTTP MCP server has no authentication (internal only)
-- Filesystem MCP is read-only and containerized
+- Weather MCP uses API key for external API access
 - Both only accessible via gateway (network isolation)
 
 ### 6.3 Virtual Server Security
@@ -264,7 +260,22 @@ This document describes the complete specification for a Model Context Protocol 
 
 ## 7. Client Configuration Guides
 
-### 7.1 OpenCode Desktop
+### 7.1 MCP Inspector
+
+**Purpose**: Interactive testing and debugging tool for MCP servers
+
+**Usage**:
+```bash
+npx -y @modelcontextprotocol/inspector
+```
+
+**Configuration**:
+1. Start the inspector
+2. Enter server URL: `http://localhost:4444/servers/{uuid}/mcp`
+3. Complete OAuth flow when prompted
+4. Interact with available tools
+
+### 7.2 OpenCode Desktop
 
 **Documentation**: https://docs.opencode.ai/clients/mcp
 
@@ -282,23 +293,6 @@ This document describes the complete specification for a Model Context Protocol 
   }
 }
 ```
-
-### 7.2 VS Code with Cline/Roo Code
-
-**Documentation**: https://github.com/cline/cline#model-context-protocol-mcp
-
-**Configuration**:
-- Use MCP settings in VS Code
-- Add server URL with OAuth support
-
-### 7.3 ChatGPT Desktop
-
-**Documentation**: https://help.openai.com/en/articles/10175700-mcp
-
-**Configuration**:
-- Navigate to Settings > MCP
-- Add custom server endpoint
-- Complete OAuth flow
 
 ## 8. Demo Script
 
@@ -328,23 +322,20 @@ echo "[2/5] Starting JSONPlaceholder MCP Server..."
 docker compose up -d jsonplaceholder-mcp
 sleep 3
 
-# 3. Build filesystem MCP
-echo "[3/5] Building Filesystem MCP Server..."
-docker compose build filesystem-mcp
+# 3. Start Weather MCP
+echo "[3/5] Starting Weather MCP Server..."
+docker compose up -d weather-mcp
+sleep 3
 
-# 4. Start translate wrapper
-echo "[4/5] Starting stdio-to-SSE translator..."
-docker compose up -d filesystem-translate
-
-# 5. Health checks
-echo "[5/5] Waiting for services..."
+# 4. Health checks
+echo "[4/5] Waiting for services..."
 ./scripts/wait-for-healthy.sh
 
 echo ""
 echo "=== Demo Ready ==="
 echo "Gateway Admin UI: http://localhost:4444/admin"
 echo "Admin Email: admin@demo.local"
-echo "Admin Password: demopass123"
+echo "Admin Password: asdQWE!@#"
 echo ""
 echo "Next Steps:"
 echo "1. Open http://localhost:4444/admin"
@@ -359,10 +350,10 @@ docker compose logs -f
 
 ### Common Issues
 
-1. **Port Conflicts**: Ensure ports 4444 and 8001 are free
+1. **Port Conflicts**: Ensure ports 4444, 8001, and 8002 are free
 2. **Docker Network**: Use `host.docker.internal` for cross-container communication
 3. **OAuth Redirect**: Ensure callback URL matches gateway configuration
-4. **CORS Issues**: Gateway handles CORS, but verify client configuration
+4. **Weather API**: Ensure valid OpenWeatherMap API key is configured
 
 ### Debug Commands
 
@@ -373,8 +364,14 @@ docker compose logs mcp-gateway
 # Check HTTP MCP logs
 docker compose logs jsonplaceholder-mcp
 
+# Check Weather MCP logs
+docker compose logs weather-mcp
+
 # Test HTTP MCP directly
 curl http://localhost:8001/tools
+
+# Test Weather MCP directly
+curl http://localhost:8002/tools
 
 # Test gateway API
 curl http://localhost:4444/health
@@ -385,8 +382,10 @@ curl http://localhost:4444/health
 - [MCP Context Forge Documentation](https://ibm.github.io/mcp-context-forge/)
 - [Duende IdentityServer Documentation](https://docs.duendesoftware.com/)
 - [JSONPlaceholder Guide](https://jsonplaceholder.typicode.com/guide/)
+- [OpenWeatherMap API Documentation](https://openweathermap.org/api)
 - [Model Context Protocol Specification](https://modelcontextprotocol.io/)
 - [OpenCode MCP Client Docs](https://docs.opencode.ai/)
+- [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
 
 ---
 

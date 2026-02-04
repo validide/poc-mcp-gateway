@@ -7,9 +7,9 @@ A complete demonstration of the Model Context Protocol (MCP) Gateway using IBM's
 This demo showcases:
 - **IBM MCP Context Forge** as the central gateway and registry
 - **Duende IdentityServer Demo** for OAuth 2.1 authentication
-- **Two custom MCP backends**:
+- **Two public MCP backends**:
   - HTTP-based MCP server fetching data from JSONPlaceholder API
-  - Docker-based stdio MCP server for read-only filesystem operations
+  - Weather MCP server providing real-time weather data via OpenWeatherMap API
 - **Virtual server composition** combining both backends behind OAuth 2.1 security
 
 ## 🏗️ Architecture
@@ -17,7 +17,7 @@ This demo showcases:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Desktop MCP Clients                          │
-│         (OpenCode Desktop / VS Code / ChatGPT Desktop)           │
+│              (OpenCode Desktop / MCP Inspector)                  │
 └──────────────────────┬──────────────────────────────────────────┘
                        │
                        │ OAuth 2.1 + MCP Protocol
@@ -31,21 +31,21 @@ This demo showcases:
          │                           │
          v                           v
 ┌─────────────────┐     ┌──────────────────────┐
-│ HTTP MCP Server │     │ stdio MCP Server     │
-│ (Port 8001)     │     │ (via translator)     │
-│                 │     │ (Port 8002)          │
-│ • get_posts     │     │                      │
-│ • get_users     │     │ • list_directory     │
-│ • get_comments  │     │ • read_file          │
-│ • get_todos     │     │ • get_file_info      │
+│ HTTP MCP Server │     │ Weather MCP Server   │
+│ (Port 8001)     │     │ (Port 8002)          │
+│                 │     │                      │
+│ • get_posts     │     │ • get_forecast       │
+│ • get_users     │     │ • get_current        │
+│ • get_comments  │     │ • search_location    │
+│ • get_todos     │     │                      │
 │ • get_albums    │     │                      │
-│ • get_photos    │     │ Docker Container     │
+│ • get_photos    │     │                      │
 └─────────────────┘     └──────────────────────┘
          │                           │
          v                           v
 ┌─────────────────┐     ┌──────────────────────┐
-│ JSONPlaceholder │     │ Host Filesystem      │
-│ API             │     │ (Read-Only Mount)    │
+│ JSONPlaceholder │     │ OpenWeatherMap API   │
+│ API             │     │                      │
 └─────────────────┘     └──────────────────────┘
 ```
 
@@ -84,10 +84,10 @@ Once started, you'll have access to:
 
 | Service | URL | Credentials |
 |---------|-----|---------------|
-| Gateway Admin UI | http://localhost:4444/admin | admin@demo.local / demopass123 |
+| Gateway Admin UI | http://localhost:4444/admin | admin@demo.local / asdQWE!@# |
 | Gateway API | http://localhost:4444 | Bearer token via API |
 | JSONPlaceholder MCP | http://localhost:8001 | Direct access |
-| Filesystem MCP | http://localhost:8002 | Via translator |
+| Weather MCP | http://localhost:8002 | Direct access |
 
 ## 📋 Step-by-Step Demo Guide
 
@@ -100,7 +100,7 @@ The `start-demo.sh` script handles this phase automatically.
 #### Register JSONPlaceholder MCP
 
 1. Open http://localhost:4444/admin
-2. Login with: `admin@demo.local` / `demopass123`
+2. Login with: `admin@demo.local` / `asdQWE!@#`
 3. Navigate to **"Gateways"** section
 4. Click **"Register Gateway"**
 5. Fill in:
@@ -111,14 +111,14 @@ The `start-demo.sh` script handles this phase automatically.
 6. Click **Save**
 7. Wait for gateway to discover 8 tools automatically
 
-#### Register Filesystem MCP
+#### Register Weather MCP
 
 1. In the **"Gateways"** section, click **"Register Gateway"**
 2. Fill in:
-   - **Name**: `filesystem-mcp`
+   - **Name**: `weather-mcp`
    - **URL**: `http://host.docker.internal:8002/sse`
    - **Protocol**: `SSE`
-   - **Description**: `Read-only filesystem access via Docker`
+   - **Description**: `Real-time weather data via OpenWeatherMap API`
 3. Click **Save**
 4. Wait for gateway to discover 3 tools automatically
 
@@ -128,10 +128,10 @@ The `start-demo.sh` script handles this phase automatically.
 2. Click **"Create Server"**
 3. Fill in:
    - **Name**: `demo-combined-server`
-   - **Description**: `Combined JSONPlaceholder and Filesystem tools with OAuth`
+   - **Description**: `Combined JSONPlaceholder and Weather tools with OAuth`
 4. In **"Associated Tools"**, select all 11 tools:
    - 8 tools from `jsonplaceholder-mcp`
-   - 3 tools from `filesystem-mcp`
+   - 3 tools from `weather-mcp`
 5. Click **Save**
 6. Note the **Server UUID** (needed for client configuration)
 
@@ -155,7 +155,20 @@ The `start-demo.sh` script handles this phase automatically.
 3. Use any credentials (demo server accepts any login)
 4. After authentication, you'll have access to all 11 tools
 
-### Phase 6: Configure Desktop Client
+### Phase 6: Test with MCP Clients
+
+#### MCP Inspector
+
+1. Install and run MCP Inspector:
+   ```bash
+   npx -y @modelcontextprotocol/inspector
+   ```
+2. In the inspector interface:
+   - **Server URL**: `http://localhost:4444/servers/{UUID}/mcp`
+   - Complete OAuth flow when prompted
+3. Test available tools:
+   - Try `get_users` from JSONPlaceholder
+   - Try `get_current` for weather data
 
 #### OpenCode Desktop
 
@@ -169,29 +182,6 @@ The `start-demo.sh` script handles this phase automatically.
 5. On first use, complete OAuth flow in browser
 
 **Documentation**: https://docs.opencode.ai/clients/mcp
-
-#### VS Code (Cline/Roo Code)
-
-1. Install Cline or Roo Code extension
-2. Open extension settings
-3. Add MCP server:
-   - **Server URL**: `http://localhost:4444/servers/{UUID}/mcp`
-   - **Transport**: HTTP
-4. Configure OAuth in settings
-
-**Documentation**: https://github.com/cline/cline#model-context-protocol-mcp
-
-#### ChatGPT Desktop
-
-1. Open ChatGPT Desktop
-2. Navigate to **Settings** > **MCP**
-3. Click **"Add Custom Server"**
-4. Enter:
-   - **Name**: `MCP Gateway Demo`
-   - **URL**: `http://localhost:4444/servers/{UUID}/mcp`
-5. Complete OAuth authentication when prompted
-
-**Documentation**: https://help.openai.com/en/articles/10175700-mcp
 
 ## 🔧 Available Tools
 
@@ -208,15 +198,15 @@ The `start-demo.sh` script handles this phase automatically.
 | `get_albums` | List all albums | `user_id` (integer, optional) |
 | `get_photos` | Get photos from album | `album_id` (integer) |
 
-### Filesystem Tools (3 tools)
+### Weather Tools (3 tools)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `list_directory` | List directory contents | `path` (string, default: ".") |
-| `read_file` | Read file contents | `path` (string, required) |
-| `get_file_info` | Get file metadata | `path` (string, required) |
+| `get_current` | Get current weather for a location | `location` (string, required), `units` (string, optional) |
+| `get_forecast` | Get weather forecast for a location | `location` (string, required), `days` (integer, optional), `units` (string, optional) |
+| `search_location` | Search for location coordinates | `query` (string, required) |
 
-**Security Note**: Filesystem access is READ-ONLY and restricted to the mounted directory.
+**API Note**: Uses OpenWeatherMap API for real-time weather data.
 
 ## 🛠️ Project Structure
 
@@ -233,8 +223,8 @@ mcp-gateway-demo/
 │   │   ├── server.py           # HTTP MCP server (Python 3.14+)
 │   │   ├── Dockerfile          # Multi-stage build with uv
 │   │   └── requirements.txt    # Python dependencies
-│   └── filesystem/
-│       ├── server.py           # stdio MCP server (Python 3.14+)
+│   └── weather/
+│       ├── server.py           # HTTP MCP server (Python 3.14+)
 │       ├── Dockerfile          # Multi-stage build with uv
 │       └── requirements.txt    # Python dependencies
 ├── scripts/
@@ -248,11 +238,22 @@ mcp-gateway-demo/
 
 ## 🐳 Docker Services
 
+### PostgreSQL Database
+- **Image**: `postgres:17`
+- **Port**: 5433 (mapped from 5432)
+- **Database**: `mcp`
+- **Features**: Persistent storage for gateway data
+
+### Redis Cache
+- **Image**: `redis:7`
+- **Port**: 6379
+- **Features**: Session caching, registry caching
+
 ### MCP Gateway
 - **Image**: `ghcr.io/ibm/mcp-context-forge:1.0.0-BETA-2`
 - **Port**: 4444
 - **Features**: Admin UI, API, MCP protocol support
-- **Data**: SQLite database in Docker volume
+- **Data**: PostgreSQL database, Redis cache
 
 ### JSONPlaceholder MCP
 - **Build**: Local Dockerfile
@@ -260,11 +261,12 @@ mcp-gateway-demo/
 - **Transport**: SSE (Server-Sent Events)
 - **External API**: https://jsonplaceholder.typicode.com/
 
-### Filesystem MCP
+### Weather MCP
 - **Build**: Local Dockerfile
-- **Transport**: stdio (wrapped by gateway translator)
-- **Port**: 8002 (translator endpoint)
-- **Volume**: Read-only mount of host home directory
+- **Port**: 8002
+- **Transport**: SSE (Server-Sent Events)
+- **External API**: https://api.openweathermap.org/
+- **API Key**: Required (configured via environment variable)
 
 ## 🔒 Security Considerations
 
@@ -276,15 +278,16 @@ mcp-gateway-demo/
 
 ### Backend Security
 - HTTP MCP server: No authentication (internal network only)
-- Filesystem MCP: Read-only access, containerized, path restricted
+- Weather MCP: API key authentication for external API
 - Both backends only accessible via gateway
 
 ### Demo Security Warnings
 ⚠️ **Important**: This is a demo environment with the following limitations:
-- Hardcoded admin password (`demopass123`)
+- Hardcoded admin password (`asdQWE!@#`)
 - Predictable JWT secret key
+- Default PostgreSQL password (`postgres`)
 - Uses public Duende demo server
-- Read-only filesystem access
+- OpenWeatherMap API key in environment variable
 - Not suitable for production use without hardening
 
 ## 📚 Documentation
@@ -296,6 +299,7 @@ mcp-gateway-demo/
 - [MCP Context Forge](https://ibm.github.io/mcp-context-forge/) - Gateway documentation
 - [Duende IdentityServer](https://docs.duendesoftware.com/) - OAuth/OIDC documentation
 - [JSONPlaceholder](https://jsonplaceholder.typicode.com/guide/) - Fake REST API guide
+- [OpenWeatherMap API](https://openweathermap.org/api) - Weather API documentation
 - [Model Context Protocol](https://modelcontextprotocol.io/) - MCP specification
 - [OpenCode MCP Client](https://docs.opencode.ai/) - Client documentation
 
@@ -320,6 +324,7 @@ Individual components:
 - IBM MCP Context Forge: Apache 2.0
 - Duende IdentityServer: Commercial (demo server used here)
 - JSONPlaceholder: Free to use
+- OpenWeatherMap: Free tier available
 
 ## 📝 Notes
 
@@ -330,6 +335,6 @@ Individual components:
 
 ---
 
-**Last Updated**: 2026-02-03  
-**Demo Version**: 1.0  
+**Last Updated**: 2026-02-03
+**Demo Version**: 1.0
 **Status**: Ready for use
