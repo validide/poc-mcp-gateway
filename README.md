@@ -57,9 +57,9 @@ This demo showcases:
 - Docker Compose
 - curl (for health checks)
 - Ports 4444, 8001, and 8002 available
-- Python 3.12+ (for development)
+- Python 3.14+ (for development)
 
-### Option A: Development Environment Setup
+### Development Environment Setup
 
 Configure modern Python development stack with uv, Ruff, and MyPy:
 
@@ -67,7 +67,7 @@ Configure modern Python development stack with uv, Ruff, and MyPy:
 # Clone or navigate to the repository
 cd mcp-gateway-demo
 
-# Setup development environment (Python 3.12+, uv, ruff, mypy)
+# Setup development environment (Python 3.14+, uv, ruff, mypy)
 ./scripts/setup-dev.sh
 
 # This will install:
@@ -77,84 +77,6 @@ cd mcp-gateway-demo
 # • Pre-commit hooks - Automatic code quality checks
 # • VS Code extensions - Recommended Python tooling
 ```
-
-### Option B: Docker-Only Demo (Linux/Mac/Git Bash)
-
-```bash
-# Clone or navigate to the repository
-cd mcp-gateway-demo
-
-# Make scripts executable (Linux/Mac)
-chmod +x scripts/*.sh
-
-# Start all services
-./scripts/start-demo.sh
-```
-
-### Option C: Windows (WSL Recommended)
-
-For Windows users, we recommend using **WSL 2** (Windows Subsystem for Linux) for the best compatibility with bash scripts and Docker:
-
-#### Prerequisites
-- [WSL 2 installed](https://learn.microsoft.com/en-us/windows/wsl/install) with a Linux distribution (Ubuntu recommended)
-- [Docker Desktop with WSL 2 backend](https://docs.docker.com/desktop/wsl/)
-
-#### Quick Start with WSL
-
-```bash
-# Open WSL terminal in the project directory
-cd /mnt/c/code/mcp-gateway  # Adjust path to your Windows drive
-
-# Setup development environment
-./scripts/setup-dev.sh
-
-# Or start the demo directly
-./scripts/start-demo.sh
-
-# Stop the demo
-./scripts/stop-demo.sh
-```
-
-#### Alternative: Git Bash
-
-If you prefer not to use WSL, you can run the scripts directly from Git Bash:
-
-```bash
-# Open Git Bash in the project folder
-cd mcp-gateway-demo
-
-# Make scripts executable and run
-chmod +x scripts/*.sh
-./scripts/start-demo.sh
-```
-
-**Note:** Git Bash provides a Unix-like environment but may have some limitations with certain features.
-
-#### Alternative: PowerShell (Native Windows)
-
-If you prefer using PowerShell natively without WSL or Git Bash, we provide a PowerShell setup script:
-
-```powershell
-# Open PowerShell in the project folder
-cd mcp-gateway-demo
-
-# Setup development environment (PowerShell edition)
-.\scripts\setup-dev.ps1
-
-# Start the demo (requires WSL or Docker Desktop)
-docker compose up -d
-```
-
-**Note:** The PowerShell script provides the same development environment setup but runs natively on Windows without requiring WSL. However, for the actual demo (Docker containers), you'll still need Docker Desktop.
-
-The script will:
-1. Check prerequisites (Docker, ports)
-2. Start the MCP Gateway on port 4444
-3. Start the JSONPlaceholder MCP server on port 8001
-4. Build and start the Filesystem MCP server (stdio)
-5. Start the stdio-to-SSE translator on port 8002
-6. Verify all services are healthy
-7. Display instructions and start showing logs
 
 ### Access the Demo
 
@@ -308,11 +230,11 @@ mcp-gateway-demo/
 │   └── SPECIFICATION.md         # Detailed specification document
 ├── mcp-servers/
 │   ├── jsonplaceholder/
-│   │   ├── server.py           # HTTP MCP server (Python 3.12+)
+│   │   ├── server.py           # HTTP MCP server (Python 3.14+)
 │   │   ├── Dockerfile          # Multi-stage build with uv
 │   │   └── requirements.txt    # Python dependencies
 │   └── filesystem/
-│       ├── server.py           # stdio MCP server (Python 3.12+)
+│       ├── server.py           # stdio MCP server (Python 3.14+)
 │       ├── Dockerfile          # Multi-stage build with uv
 │       └── requirements.txt    # Python dependencies
 ├── scripts/
@@ -364,51 +286,6 @@ mcp-gateway-demo/
 - Uses public Duende demo server
 - Read-only filesystem access
 - Not suitable for production use without hardening
-
-## 🐛 Troubleshooting
-
-### Port Conflicts
-
-```bash
-# Check what's using the ports
-lsof -i :4444
-lsof -i :8001
-lsof -i :8002
-
-# Or stop conflicting services
-docker compose down
-```
-
-### Docker Issues
-
-```bash
-# Check Docker is running
-docker info
-
-# Check containers status
-docker compose ps
-
-# View logs
-docker compose logs [service-name]
-
-# Restart specific service
-docker compose restart [service-name]
-```
-
-### OAuth Issues
-
-1. Ensure redirect URI matches: `http://localhost:4444/auth/callback`
-2. Check Duende demo server is accessible: https://demo.duendesoftware.com/
-3. Verify virtual server UUID is correct in client configuration
-
-### Network Issues
-
-For cross-container communication on Linux:
-- Use `host.docker.internal` (handled automatically in docker-compose)
-- On some Linux setups, you may need to add to `/etc/hosts`:
-  ```
-  127.0.0.1 host.docker.internal
-  ```
 
 ## 📚 Documentation
 
