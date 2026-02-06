@@ -1,6 +1,9 @@
 using System.Globalization;
+using System.Net;
 using Duende.IdentityServer;
 using Duende.IdentityServer.Configuration;
+using Duende.IdentityServer.Configuration.Validation.DynamicClientRegistration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Filters;
@@ -49,24 +52,34 @@ internal static class HostingExtensions
     {
         builder.Services.AddRazorPages();
 
+        // Trust nginx forwarded headers so the IdP knows external traffic is HTTPS
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.All;
+            options.KnownIPNetworks.Clear();
+            options.KnownProxies.Clear();
+        });
+
+        // builder.Services.TryAddTransient<IDynamicClientRegistrationValidator, DynamicClientRegistrationValidator>();
+
         var isBuilder = builder.Services.AddIdentityServer(options =>
-            {
-                // this will add the default dynamic client registration endpoint to the discovery/metadatada documents
-                options.Discovery.DynamicClientRegistration.RegistrationEndpointMode = RegistrationEndpointMode.Inferred;
+                    {
+                        // this will add the default dynamic client registration endpoint to the discovery/metadatada documents
+                        options.Discovery.DynamicClientRegistration.RegistrationEndpointMode = RegistrationEndpointMode.Inferred;
 
-                options.Events.RaiseErrorEvents = true;
-                options.Events.RaiseInformationEvents = true;
-                options.Events.RaiseFailureEvents = true;
-                options.Events.RaiseSuccessEvents = true;
+                        options.Events.RaiseErrorEvents = true;
+                        options.Events.RaiseInformationEvents = true;
+                        options.Events.RaiseFailureEvents = true;
+                        options.Events.RaiseSuccessEvents = true;
 
-                // Use a large chunk size for diagnostic logs in development where it will be redirected to a local file
-                if (builder.Environment.IsDevelopment())
-                {
-                    options.Diagnostics.ChunkSize = 1024 * 1024 * 10; // 10 MB
-                }
-            })
-            .AddTestUsers(TestUsers.Users)
-            .AddLicenseSummary();
+                        // Use a large chunk size for diagnostic logs in development where it will be redirected to a local file
+                        if (builder.Environment.IsDevelopment())
+                        {
+                            options.Diagnostics.ChunkSize = 1024 * 1024 * 10; // 10 MB
+                        }
+                    })
+                    .AddTestUsers(TestUsers.Users)
+                    .AddLicenseSummary();
 
         // in-memory, code config
         isBuilder.AddInMemoryIdentityResources(Config.IdentityResources);
@@ -79,6 +92,7 @@ internal static class HostingExtensions
             // in memory is being used here to keep the demo simple. in a real scenario, a persistent storage
             // mechanism is needed for client registrations to persist across application restarts
             .AddInMemoryClientConfigurationStore();
+
 
         builder.Services.AddAuthentication()
             .AddOpenIdConnect("oidc", "Sign-in with demo.duendesoftware.com", options =>
@@ -104,6 +118,10 @@ internal static class HostingExtensions
 
     public static WebApplication ConfigurePipeline(this WebApplication app)
     {
+        // Must be first — rewrites scheme/host/port from X-Forwarded-* headers
+        // before any middleware generates URLs (e.g., OIDC discovery, redirects)
+        app.UseForwardedHeaders();
+
         app.UseSerilogRequestLogging();
 
         if (app.Environment.IsDevelopment())

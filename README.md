@@ -1,294 +1,268 @@
 # MCP Gateway Demo
 
-A complete demonstration of the Model Context Protocol (MCP) Gateway using IBM's Context Forge, featuring OAuth 2.1 authentication via a local Duende IdentityServer and multiple MCP backends.
+A complete demonstration of the Model Context Protocol (MCP) Gateway using AgentGateway, featuring path-based routing with public and OAuth 2.1 protected routes, a local Duende IdentityServer, and multiple MCP backends (local and remote).
 
-## 🎯 Overview
+## Overview
 
 This demo showcases:
-- **IBM MCP Context Forge** as the central gateway and registry
+- **AgentGateway** as the central MCP gateway (https://agentgateway.dev/)
+- **Path-based routing** with 6 distinct MCP routes on a single endpoint
+- **Public routes** proxying to remote MCP servers (Context7, Kismet Travel, Microsoft Learn)
+- **Protected routes** with OAuth 2.1 + DCR for local MCP backends (JSONPlaceholder, Weather)
+- **Tool multiplexing** combining multiple backends through a single `/mixed` route
 - **Local Duende IdentityServer** for OAuth 2.1 authentication (with test users alice/bob)
-- **Two public MCP backends**:
-  - HTTP-based MCP server fetching data from JSONPlaceholder API
-  - Weather MCP server providing real-time weather data via OpenWeatherMap API
-- **Virtual server composition** combining both backends behind OAuth 2.1 security
+- **Admin UI** for gateway monitoring and management
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Desktop MCP Clients                          │
-│              (OpenCode Desktop / MCP Inspector)                  │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │
-                       │ OAuth 2.1 + MCP Protocol
-                       v
-┌─────────────────────────────────────────────────────────────────┐
-│                   MCP Gateway (localhost:8080)                  │
-│              IBM Context Forge - Admin UI & API                  │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │
-         ┌─────────────┴─────────────┐
-         │                           │
-         v                           v
-┌─────────────────┐     ┌──────────────────────┐
-│ HTTP MCP Server │     │ Weather MCP Server   │
-│ (Port 8001)     │     │ (Port 8002)          │
-│                 │     │                      │
-│ • get_posts     │     │ • get_forecast       │
-│ • get_users     │     │ • get_current        │
-│ • get_comments  │     │ • search_location    │
-│ • get_todos     │     │                      │
-│ • get_albums    │     │                      │
-│ • get_photos    │     │                      │
-└─────────────────┘     └──────────────────────┘
-         │                           │
-         v                           v
-┌─────────────────┐     ┌──────────────────────┐
-│ JSONPlaceholder │     │ OpenWeatherMap API   │
-│ API             │     │                      │
-└─────────────────┘     └──────────────────────┘
++---------------------------------------------------------------+
+|                     Desktop MCP Clients                        |
+|              (OpenCode Desktop / MCP Inspector)                |
++---------------------------+-----------------------------------+
+                            |
+                            | MCP Protocol (Streamable HTTP)
+                            v
++---------------------------------------------------------------+
+|                   Nginx (localhost:8080)                       |
+|                                                                |
+|  gateway.localhost     -> AgentGateway (MCP routes)            |
+|  gateway-ui.localhost  -> AgentGateway Admin UI                |
+|  idp.localhost         -> IdentityServer                       |
+|  inspector.localhost   -> MCP Inspector                        |
++---------------------------+-----------------------------------+
+                            |
+        +-------------------+-------------------+
+        |                                       |
+        v                                       v
++------------------+                  +-------------------+
+| AgentGateway     |                  | IdentityServer    |
+| (Port 3000)      |                  | (Port 5001)       |
+| (Admin: 3001)    |                  +-------------------+
++--------+---------+
+         |
+         +------ Public (no auth) ------+------------------+
+         |               |              |                  |
+         v               v              v                  |
+  +------------+  +------------+  +-------------+          |
+  | Context7   |  | Kismet     |  | Microsoft   |          |
+  | (remote)   |  | Travel     |  | Learn       |          |
+  |            |  | (remote)   |  | (remote)    |          |
+  +------------+  +------------+  +-------------+          |
+         |                                                 |
+         +------ Protected (OAuth+DCR) ---+                |
+         |                |               |                |
+         v                v               v
+  +------------------+  +------------------+
+  | JSONPlaceholder  |  | Weather MCP      |
+  | MCP Server       |  | Server           |
+  | (Port 8001)      |  | (Port 8002)      |
+  +------------------+  +------------------+
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
 - Docker Desktop or Docker Engine
 - Docker Compose
-- curl (for health checks)
-- Ports 4444, 8001, and 8002 available
-- Python 3.14+ (for development)
 
-### Development Environment Setup
-
-Configure modern Python development stack with uv, Ruff, and MyPy:
+### Start the Demo
 
 ```bash
-# Clone or navigate to the repository
-cd mcp-gateway-demo
+# Using the start script
+./scripts/start-demo.sh
 
-# Setup development environment (Python 3.14+, uv, ruff, mypy)
-./scripts/setup-dev.sh
-
-# This will install:
-# • uv - Ultra-fast Python package manager
-# • Ruff - Modern linter & formatter (replaces Black, isort, flake8)
-# • MyPy - Strict type checker
-# • Pre-commit hooks - Automatic code quality checks
-# • VS Code extensions - Recommended Python tooling
+# Or manually
+docker compose up -d --build
 ```
 
 ### Access the Demo
 
-Once started, you'll have access to:
+#### Services (via nginx on port 8080)
 
-| Service | URL | Credentials |
-|---------|-----|---------------|
-| Gateway Admin UI | http://localhost:8080/admin | admin@demo.local / asdQWE!@# |
-| Gateway API | http://localhost:8080 | Bearer token via API |
-| IdentityServer (IdP) | http://localhost:5001 | alice/alice or bob/bob |
-| JSONPlaceholder MCP | http://localhost:8001 | Direct access |
-| Weather MCP | http://localhost:8002 | Direct access |
+| Service | URL |
+|---------|-----|
+| Gateway MCP | http://gateway.localhost:8080 |
+| Gateway Admin UI | http://gateway-ui.localhost:8080 |
+| IdentityServer | http://idp.localhost:8080 |
+| MCP Inspector | http://inspector.localhost:8080 |
+| JSONPlaceholder MCP | http://jsonplaceholder.localhost:8080 |
+| Weather MCP | http://weather.localhost:8080 |
 
-## 📋 Step-by-Step Demo Guide
+#### Direct Access
 
-### Phase 1: Infrastructure Setup (Automated)
+| Service | URL |
+|---------|-----|
+| Gateway MCP | http://localhost:3000 |
+| Gateway Admin UI | http://localhost:3001 |
+| IdentityServer | http://localhost:5001 |
+| MCP Inspector | http://localhost:6274 |
+| JSONPlaceholder MCP | http://localhost:8001 |
+| Weather MCP | http://localhost:8002 |
 
-The `start-demo.sh` script handles this phase automatically.
+## Gateway Routes
 
-### Phase 2: Register Backend MCP Servers
+All routes are served through the gateway at `http://gateway.localhost:8080`.
 
-#### Register JSONPlaceholder MCP
+### Public Routes (no authentication)
 
-1. Open http://localhost:8080/admin
-2. Login with: `admin@demo.local` / `asdQWE!@#`
-3. Navigate to **"Gateways"** section
-4. Click **"Register Gateway"**
-5. Fill in:
-   - **Name**: `jsonplaceholder-mcp`
-   - **URL**: `http://host.docker.internal:8001/sse`
-   - **Protocol**: `SSE`
-   - **Description**: `JSONPlaceholder API as MCP tools`
-6. Click **Save**
-7. Wait for gateway to discover 8 tools automatically
+| Route | Path | Remote Target |
+|-------|------|---------------|
+| Context7 | `/context7/mcp` | https://mcp.context7.com/mcp |
+| Kismet Travel | `/travel/mcp` | https://mcp.kismet.travel/mcp |
+| Microsoft Learn | `/learn/mcp` | https://learn.microsoft.com/api/mcp |
 
-#### Register Weather MCP
+### Protected Routes (OAuth 2.1 + DCR)
 
-1. In the **"Gateways"** section, click **"Register Gateway"**
-2. Fill in:
-   - **Name**: `weather-mcp`
-   - **URL**: `http://host.docker.internal:8002/sse`
-   - **Protocol**: `SSE`
-   - **Description**: `Real-time weather data via OpenWeatherMap API`
-3. Click **Save**
-4. Wait for gateway to discover 3 tools automatically
+These routes require authentication via the local IdentityServer.
 
-### Phase 3: Create Virtual Server
+| Route | Path | Backend |
+|-------|------|---------|
+| JSONPlaceholder | `/placeholder/mcp` | jsonplaceholder-mcp:8001 |
+| Weather | `/weather/mcp` | weather-mcp:8002 |
+| Mixed | `/mixed/mcp` | JSONPlaceholder + Weather combined |
 
-1. Navigate to **"Servers"** section
-2. Click **"Create Server"**
-3. Fill in:
-   - **Name**: `demo-combined-server`
-   - **Description**: `Combined JSONPlaceholder and Weather tools with OAuth`
-4. In **"Associated Tools"**, select all 11 tools:
-   - 8 tools from `jsonplaceholder-mcp`
-   - 3 tools from `weather-mcp`
-5. Click **Save**
-6. Note the **Server UUID** (needed for client configuration)
+The `/mixed` route multiplexes both local backends, exposing all tools from both servers through a single endpoint.
 
-### Phase 4: Configure OAuth 2.1
+## Configuration
 
-1. Find your virtual server and click **"Edit"**
-2. Navigate to **"Authentication"** tab
-3. Configure OAuth:
-   - **Provider**: `local-idp`
-   - **Discovery URL**: `http://localhost:5001/.well-known/openid-configuration`
-   - **Client ID**: (dynamically registered via DCR)
-   - **Redirect URI**: `http://localhost:8080/auth/callback`
-   - **Scopes**: `openid profile mcp:tools`
-4. Click **Save**
+### Gateway Configuration
 
-**Note**: The local IdentityServer supports Dynamic Client Registration (DCR), so clients can be registered automatically.
+The gateway is configured via `gateway/config.yaml` with path-based routing:
 
-### Phase 5: Test OAuth Flow
+```yaml
+config:
+  adminAddr: "0.0.0.0:3001"
 
-1. Visit: `http://localhost:8080/servers/{UUID}/mcp`
-   (replace `{UUID}` with your virtual server UUID)
-2. You'll be redirected to the local IdentityServer login page
-3. Use test credentials: `alice` / `alice` (or `bob` / `bob`)
-4. After authentication, you'll have access to all 11 tools
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    # Public - no auth, proxied to remote MCP servers
+    - name: context7
+      matches:
+      - path:
+          pathPrefix: /context7
+      backends:
+      - mcp:
+          targets:
+          - name: context7
+            mcp:
+              host: https://mcp.context7.com/mcp
 
-### Phase 6: Test with MCP Clients
+    # Protected - OAuth 2.1 with DCR
+    - name: placeholder
+      matches:
+      - path:
+          pathPrefix: /placeholder
+      policies:
+        mcpAuthentication:
+          issuer: http://idp.localhost:8080
+          audiences: [mcp-gateway]
+          jwks:
+            url: http://idp:5000/.well-known/openid-configuration/jwks
+          resourceMetadata:
+            resource: http://gateway.localhost:8080/placeholder
+            authorization_servers:
+            - http://idp.localhost:8080
+          mode: strict
+      backends:
+      - mcp:
+          targets:
+          - name: jsonplaceholder
+            mcp:
+              host: http://jsonplaceholder-mcp:8001/sse
+```
 
-#### MCP Inspector
+### Tool Naming
 
-1. Install and run MCP Inspector:
-   ```bash
-   npx -y @modelcontextprotocol/inspector
-   ```
-2. In the inspector interface:
-   - **Server URL**: `http://localhost:8080/servers/{UUID}/mcp`
-   - Complete OAuth flow when prompted
-3. Test available tools:
-   - Try `get_users` from JSONPlaceholder
-   - Try `get_current` for weather data
+AgentGateway automatically prefixes tools with their backend name to avoid conflicts:
+- `jsonplaceholder_get_posts`
+- `jsonplaceholder_get_users`
+- `weather_get_current`
+- `weather_get_forecast`
 
-#### OpenCode Desktop
+## Testing with MCP Inspector
 
-1. Open OpenCode Desktop settings
-2. Navigate to **MCP** section
-3. Add new server:
-   - **Name**: `demo-gateway`
-   - **URL**: `http://localhost:8080/servers/{UUID}/mcp`
-   - **OAuth**: Enabled
-4. Save and restart OpenCode
-5. On first use, complete OAuth flow in browser
+1. Open MCP Inspector at http://inspector.localhost:8080
+2. Set server URL to a gateway route:
+   - Public: `http://gateway.localhost:8080/context7/mcp`
+   - Protected: `http://gateway.localhost:8080/placeholder/mcp`
+3. Select transport: Streamable HTTP
+4. Connect and browse available tools
 
-**Documentation**: https://docs.opencode.ai/clients/mcp
+## Available Tools
 
-## 🌐 Public Remote MCP Servers
-
-In addition to the local MCP servers, you can register these public remote MCP servers in the gateway:
-
-| Server | URL | Description |
-|--------|-----|-------------|
-| Context7 | https://mcp.context7.com/mcp | Context7 MCP Server |
-| Kismet Travel | https://mcp.kismet.travel/mcp | Kismet Travel MCP Server |
-| Microsoft Learn | https://learn.microsoft.com/api/mcp | Microsoft Learn Documentation MCP |
-
-To register a public MCP server:
-1. Open the Gateway Admin UI
-2. Navigate to "Gateways" → "Register Gateway"
-3. Enter the URL from the table above
-4. Select protocol: "Streamable HTTP" or "SSE"
-
-## 🔧 Available Tools
-
-### JSONPlaceholder Tools (8 tools)
+### JSONPlaceholder Tools (8 tools) — via `/placeholder/mcp`
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `get_posts` | List all blog posts | None |
-| `get_post` | Get specific post by ID | `id` (integer) |
-| `get_comments` | Get comments for a post | `post_id` (integer) |
-| `get_users` | List all users | None |
-| `get_user` | Get specific user by ID | `id` (integer) |
-| `get_todos` | List all todos | `user_id` (integer, optional) |
-| `get_albums` | List all albums | `user_id` (integer, optional) |
-| `get_photos` | Get photos from album | `album_id` (integer) |
+| `jsonplaceholder_get_posts` | List all blog posts | None |
+| `jsonplaceholder_get_post` | Get specific post by ID | `id` (integer) |
+| `jsonplaceholder_get_comments` | Get comments for a post | `post_id` (integer) |
+| `jsonplaceholder_get_users` | List all users | None |
+| `jsonplaceholder_get_user` | Get specific user by ID | `id` (integer) |
+| `jsonplaceholder_get_todos` | List all todos | `user_id` (integer, optional) |
+| `jsonplaceholder_get_albums` | List all albums | `user_id` (integer, optional) |
+| `jsonplaceholder_get_photos` | Get photos from album | `album_id` (integer) |
 
-### Weather Tools (3 tools)
+### Weather Tools (3 tools) — via `/weather/mcp`
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `get_current` | Get current weather for a location | `location` (string, required), `units` (string, optional) |
-| `get_forecast` | Get weather forecast for a location | `location` (string, required), `days` (integer, optional), `units` (string, optional) |
-| `search_location` | Search for location coordinates | `query` (string, required) |
+| `weather_get_current` | Get current weather for a location | `location` (string, required), `units` (string, optional) |
+| `weather_get_forecast` | Get weather forecast for a location | `location` (string, required), `days` (integer, optional), `units` (string, optional) |
+| `weather_search_location` | Search for location coordinates | `query` (string, required) |
 
-**API Note**: Uses OpenWeatherMap API for real-time weather data.
+### Mixed (all 11 tools) — via `/mixed/mcp`
 
-## 🛠️ Project Structure
+The `/mixed` route exposes all tools from both JSONPlaceholder and Weather backends.
+
+## Project Structure
 
 ```
 mcp-gateway-demo/
-├── .vscode/                     # VS Code configuration (2026-ready)
-│   ├── settings.json           # Ruff, MyPy, Pylance settings
-│   ├── extensions.json         # Recommended extensions
-│   └── README.md               # VS Code setup guide
-├── idp/                         # Local IdentityServer (OAuth/OIDC)
-│   ├── IdentityServer.slnx     # .NET solution file
-│   └── IdentityServer/
-│       ├── Program.cs          # Entry point with Serilog
-│       ├── HostingExtensions.cs # DI and middleware setup
-│       ├── Config.cs           # OAuth scopes and resources
-│       ├── TestUsers.cs        # Test users (alice/bob)
-│       ├── Dockerfile          # Docker build
-│       └── Pages/              # Login, Consent, etc. UI
-├── specs/
-│   └── SPECIFICATION.md         # Detailed specification document
-├── mcp-servers/
-│   ├── jsonplaceholder/
-│   │   ├── server.py           # HTTP MCP server (Python 3.14+)
-│   │   ├── Dockerfile          # Multi-stage build with uv
-│   │   └── requirements.txt    # Python dependencies
-│   └── weather/
-│       ├── server.py           # HTTP MCP server (Python 3.14+)
-│       ├── Dockerfile          # Multi-stage build with uv
-│       └── requirements.txt    # Python dependencies
-├── scripts/
-│   ├── setup-dev.sh            # Development environment setup
-│   ├── start-demo.sh           # Startup script with instructions
-│   └── stop-demo.sh            # Cleanup script
-├── docker-compose.yml          # Complete stack (2026 best practices)
-├── pyproject.toml              # Modern Python packaging (uv, ruff, mypy)
-└── README.md                   # This file
++-- gateway/
+|   +-- config.yaml              # AgentGateway configuration (routes, auth, backends)
++-- idp/                         # Local IdentityServer (OAuth/OIDC)
+|   +-- IdentityServer/
+|       +-- Program.cs           # Entry point
+|       +-- Config.cs            # OAuth scopes and resources
+|       +-- TestUsers.cs         # Test users (alice/bob)
+|       +-- Dockerfile
++-- mcp-servers/
+|   +-- jsonplaceholder/
+|   |   +-- server.py            # JSONPlaceholder MCP server
+|   |   +-- Dockerfile
+|   +-- weather/
+|       +-- server.py            # Weather MCP server
+|       +-- Dockerfile
++-- nginx/
+|   +-- nginx.conf               # Reverse proxy configuration
+|   +-- snippets/                # CORS, headers, SSE support
++-- specs/
+|   +-- SPECIFICATION.md         # Technical specification
++-- scripts/
+|   +-- start-demo.sh            # Start script
++-- docker-compose.yml           # Service orchestration
++-- README.md                    # This file
 ```
 
-## 🐳 Docker Services
+## Docker Services
+
+### AgentGateway
+- **Image**: `ghcr.io/agentgateway/agentgateway:latest`
+- **Port**: 3000 (MCP routes), 3001 (Admin UI)
+- **Features**: Path-based MCP routing, OAuth integration, remote MCP proxying, admin UI
+- **Docs**: https://agentgateway.dev/
 
 ### IdentityServer (IdP)
 - **Build**: Local Dockerfile (`idp/IdentityServer`)
 - **Port**: 5001
 - **Features**: OAuth 2.1 / OpenID Connect provider
 - **Test Users**: alice/alice, bob/bob
-- **DCR**: Dynamic Client Registration enabled at `/connect/dcr`
-
-### PostgreSQL Database
-- **Image**: `postgres:17`
-- **Port**: 5433 (mapped from 5432)
-- **Database**: `mcp`
-- **Features**: Persistent storage for gateway data
-
-### Redis Cache
-- **Image**: `redis:7`
-- **Port**: 6379
-- **Features**: Session caching, registry caching
-
-### MCP Gateway
-- **Image**: `ghcr.io/ibm/mcp-context-forge:1.0.0-BETA-2`
-- **Port**: 4444
-- **Features**: Admin UI, API, MCP protocol support
-- **Data**: PostgreSQL database, Redis cache
+- **DCR**: Dynamic Client Registration at `/connect/dcr`
 
 ### JSONPlaceholder MCP
 - **Build**: Local Dockerfile
@@ -301,78 +275,81 @@ mcp-gateway-demo/
 - **Port**: 8002
 - **Transport**: SSE (Server-Sent Events)
 - **External API**: https://api.openweathermap.org/
-- **API Key**: Required (configured via environment variable)
+- **API Key**: Optional (uses mock data without key)
 
-## 🔒 Security Considerations
+## Security
 
-### OAuth 2.1 Flow
+### OAuth 2.1 Flow (Protected Routes)
 - Uses **Authorization Code + PKCE** (secure for public clients)
 - Dynamic Client Registration (DCR) supported
 - Short-lived access tokens from local IdentityServer
-- Gateway validates tokens against local IdP (http://localhost:5001)
+- Gateway validates tokens via JWKS endpoint
+- Only `/placeholder`, `/weather`, and `/mixed` routes require authentication
 
-### Backend Security
-- HTTP MCP server: No authentication (internal network only)
-- Weather MCP: API key authentication for external API
-- Both backends only accessible via gateway
+### Public Routes
+- `/context7`, `/travel`, and `/learn` routes have no authentication
+- Traffic is proxied directly to remote MCP servers
 
 ### Demo Security Warnings
-⚠️ **Important**: This is a demo environment with the following limitations:
-- Hardcoded admin password (`asdQWE!@#`)
-- Predictable JWT secret key
-- Default PostgreSQL password (`postgres`)
-- Local IdentityServer uses development signing keys (not for production)
+**Important**: This is a demo environment with the following limitations:
 - Test users with simple passwords (alice/alice, bob/bob)
-- OpenWeatherMap API key in environment variable
+- Local IdentityServer uses development signing keys
 - Not suitable for production use without hardening
 
-## 📚 Documentation
+## Documentation
 
 ### Project Documentation
 - [Specification](specs/SPECIFICATION.md) - Detailed technical specification
 
 ### External References
-- [MCP Context Forge](https://ibm.github.io/mcp-context-forge/) - Gateway documentation
+- [AgentGateway](https://agentgateway.dev/) - Gateway documentation
 - [Duende IdentityServer](https://docs.duendesoftware.com/) - OAuth/OIDC documentation
 - [JSONPlaceholder](https://jsonplaceholder.typicode.com/guide/) - Fake REST API guide
 - [OpenWeatherMap API](https://openweathermap.org/api) - Weather API documentation
 - [Model Context Protocol](https://modelcontextprotocol.io/) - MCP specification
-- [OpenCode MCP Client](https://docs.opencode.ai/) - Client documentation
 
-### MCP Inspector
+## Troubleshooting
 
-For testing MCP servers directly:
+### Common Issues
+
+1. **Gateway not starting**: Check `docker compose logs mcp-gateway`
+2. **OAuth errors**: Verify IdP is healthy at http://idp.localhost:8080/.well-known/openid-configuration
+3. **Tools not visible**: Ensure MCP servers are running (`docker compose ps`)
+4. **`*.localhost` not resolving**: Most browsers/OS resolve `*.localhost` to `127.0.0.1` by default. If not, add entries to your hosts file.
+
+### Debug Commands
 
 ```bash
-npx -y @modelcontextprotocol/inspector
+# Check all service status
+docker compose ps
+
+# View gateway logs
+docker compose logs mcp-gateway
+
+# View MCP server logs
+docker compose logs jsonplaceholder-mcp
+docker compose logs weather-mcp
+
+# Test MCP servers directly
+curl http://localhost:8001/sse
+curl http://localhost:8002/sse
+
+# Test gateway health
+curl http://localhost:8080/health
 ```
 
-## 🤝 Contributing
-
-This is a demo project. For the actual MCP Gateway, see:
-- [IBM/mcp-context-forge](https://github.com/IBM/mcp-context-forge)
-
-## 📄 License
+## License
 
 This demo is provided as-is for educational and demonstration purposes.
 
 Individual components:
-- IBM MCP Context Forge: Apache 2.0
+- AgentGateway: Apache 2.0
 - Duende IdentityServer: Commercial (demo server used here)
 - JSONPlaceholder: Free to use
 - OpenWeatherMap: Free tier available
 
-## 📝 Notes
-
-- Demo uses a local Duende IdentityServer instance (http://localhost:5001)
-- Test users: `alice` / `alice` and `bob` / `bob`
-- IdentityServer supports Dynamic Client Registration (DCR) at `/connect/dcr`
-- Discovery document: http://localhost:5001/.well-known/openid-configuration
-- Data is not persisted between restarts (in-memory storage)
-- For production use, configure proper secrets and persistent storage
-
 ---
 
 **Last Updated**: 2026-02-06
-**Demo Version**: 1.0
+**Gateway**: AgentGateway
 **Status**: Ready for use

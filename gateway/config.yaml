@@ -1,0 +1,176 @@
+# AgentGateway Configuration for MCP Demo
+# https://agentgateway.dev/
+#
+# Routes:
+#   Public (no auth):     /context7, /travel, /learn
+#   Protected (OAuth+DCR): /placeholder, /weather, /mixed
+#
+# NOTE: CORS is handled entirely by nginx to avoid duplicate headers
+# from remote MCP servers that set their own CORS headers.
+#
+# Auth reference: https://agentgateway.dev/docs/local/latest/tutorials/mcp-authentication/
+# Each protected route must include its .well-known path in matches
+# so the gateway can serve the OAuth Protected Resource Metadata (RFC 9728).
+
+config:
+  adminAddr: "0.0.0.0:3001"
+
+binds:
+- port: 3000
+  listeners:
+  - routes:
+
+    # =========================================================================
+    # Public Routes (no authentication)
+    # =========================================================================
+
+    # Context7 - Library documentation
+    - name: context7
+      matches:
+      - path:
+          pathPrefix: /context7
+      backends:
+      - mcp:
+          targets:
+          - name: context7
+            mcp:
+              host: https://mcp.context7.com/mcp
+
+    # Kismet Travel
+    - name: travel
+      matches:
+      - path:
+          pathPrefix: /travel
+      backends:
+      - mcp:
+          targets:
+          - name: kismet-travel
+            mcp:
+              host: https://mcp.kismet.travel/mcp
+
+    # Microsoft Learn
+    - name: learn
+      matches:
+      - path:
+          pathPrefix: /learn
+      backends:
+      - mcp:
+          targets:
+          - name: microsoft-learn
+            mcp:
+              host: https://learn.microsoft.com/api/mcp
+
+    # JSONPlaceholder (public, no auth)
+    - name: placeholder-public
+      matches:
+      - path:
+          pathPrefix: /placeholder-public
+      backends:
+      - mcp:
+          targets:
+          - name: jsonplaceholder
+            mcp:
+              host: http://jsonplaceholder-mcp:8001/mcp
+
+    # Weather (public, no auth)
+    - name: weather-public
+      matches:
+      - path:
+          pathPrefix: /weather-public
+      backends:
+      - mcp:
+          targets:
+          - name: weather
+            mcp:
+              host: http://weather-mcp:8002/mcp
+
+    # =========================================================================
+    # Protected Routes (OAuth 2.1 with DCR)
+    # =========================================================================
+
+    # JSONPlaceholder MCP Server
+    - name: placeholder
+      matches:
+      - path:
+          pathPrefix: /placeholder
+      - path:
+          exact: /.well-known/oauth-protected-resource/placeholder/mcp
+      backends:
+      - mcp:
+          targets:
+          - name: jsonplaceholder
+            mcp:
+              host: http://jsonplaceholder-mcp:8001/mcp
+      policies:
+        mcpAuthentication:
+          issuer: https://idp.localhost:8080
+          audiences:
+          - https://gateway.localhost:8080/placeholder/mcp
+          jwks:
+            url: http://idp:5000/.well-known/openid-configuration/jwks
+          resourceMetadata:
+            resource: https://gateway.localhost:8080/placeholder/mcp
+            scopesSupported:
+            - mcp:tools
+            bearerMethodsSupported:
+            - header
+          mode: strict
+
+    # Weather MCP Server
+    - name: weather
+      matches:
+      - path:
+          pathPrefix: /weather
+      - path:
+          exact: /.well-known/oauth-protected-resource/weather/mcp
+      backends:
+      - mcp:
+          targets:
+          - name: weather
+            mcp:
+              host: http://weather-mcp:8002/mcp
+      policies:
+        mcpAuthentication:
+          issuer: https://idp.localhost:8080
+          audiences:
+          - https://gateway.localhost:8080/weather/mcp
+          jwks:
+            url: http://idp:5000/.well-known/openid-configuration/jwks
+          resourceMetadata:
+            resource: https://gateway.localhost:8080/weather/mcp
+            scopesSupported:
+            - mcp:tools
+            bearerMethodsSupported:
+            - header
+          mode: strict
+
+    # Mixed - JSONPlaceholder + Weather
+    - name: mixed
+      matches:
+      - path:
+          pathPrefix: /mixed
+      - path:
+          exact: /.well-known/oauth-protected-resource/mixed/mcp
+      backends:
+      - mcp:
+          targets:
+          - name: jsonplaceholder
+            mcp:
+              host: http://jsonplaceholder-mcp:8001/mcp
+          - name: weather
+            mcp:
+              host: http://weather-mcp:8002/mcp
+      policies:
+        mcpAuthentication:
+          issuer: https://idp.localhost:8080
+          audiences:
+          - https://gateway.localhost:8080/mixed/mcp
+          jwks:
+            url: http://idp:5000/.well-known/openid-configuration/jwks
+          resourceMetadata:
+            resource: https://gateway.localhost:8080/mixed/mcp
+            scopesSupported:
+            - mcp:tools
+            bearerMethodsSupported:
+            - header
+          mode: strict

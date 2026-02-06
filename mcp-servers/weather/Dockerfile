@@ -35,7 +35,7 @@ COPY --chown=mcpuser:mcpuser server.py .
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV MCP_TRANSPORT=sse
+ENV MCP_TRANSPORT=streamable-http
 ENV MCP_PORT=8002
 ENV MCP_HOST=0.0.0.0
 # Note: Set OPENWEATHERMAP_API_KEY at runtime for real weather data

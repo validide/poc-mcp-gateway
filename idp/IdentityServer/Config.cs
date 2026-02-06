@@ -12,12 +12,19 @@ public static class Config
 
     public static IEnumerable<ApiResource> ApiResources =>
     [
-        new("https://localhost:7141/", "MCP Server")
+        new("https://gateway.localhost:8080/placeholder/mcp", "JSONPlaceholder MCP")
+        {
+            Scopes = { "mcp:tools" }
+        },
+        new("https://gateway.localhost:8080/weather/mcp", "Weather MCP")
+        {
+            Scopes = { "mcp:tools" }
+        },
+        new("https://gateway.localhost:8080/mixed/mcp", "Mixed MCP")
         {
             Scopes = { "mcp:tools" }
         }
     ];
-
     public static IEnumerable<ApiScope> ApiScopes =>
     [
         new("mcp:tools")

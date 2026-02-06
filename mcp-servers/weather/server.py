@@ -317,8 +317,8 @@ async def search_location(query: str) -> list[dict[str, Any]]:
 
 
 if __name__ == "__main__":
-    transport: Transport = "sse"
-    transport_env = os.getenv("MCP_TRANSPORT", "sse")
+    transport: Transport = "streamable-http"
+    transport_env = os.getenv("MCP_TRANSPORT", "streamable-http")
     if transport_env in ("stdio", "sse", "http", "streamable-http"):
         transport = transport_env  # type: ignore[assignment]
     port = int(os.getenv("MCP_PORT", "8002"))
