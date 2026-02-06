@@ -5,7 +5,7 @@
 This document describes the complete specification for a Model Context Protocol (MCP) Gateway demo. The demo showcases:
 
 - **IBM MCP Context Forge** as the central gateway
-- **Duende Demo Server** for OAuth 2.1 authentication
+- **Local Duende IdentityServer** for OAuth 2.1 authentication (with test users alice/bob)
 - Two public MCP backends:
   - HTTP-based MCP fetching data from JSONPlaceholder API
   - HTTP-based MCP providing weather data via OpenWeatherMap API
@@ -22,8 +22,8 @@ This document describes the complete specification for a Model Context Protocol 
                                                   | Connect to Gateway
                                                   v
 +-------------------+     OAuth 2.1          +----------------------------+
-| Duende Demo Server| <--------------------> |    MCP Context Forge       |
-| (demo.duendesoftware.com)                  |    Gateway (localhost:4444)|
+| Local IdP         | <--------------------> |    MCP Context Forge       |
+| (localhost:5001)  |                        |    Gateway (localhost:8080)|
 +-------------------+                        +-------------+--------------+
                                                         |
                                         +---------------+---------------+
@@ -41,31 +41,37 @@ This document describes the complete specification for a Model Context Protocol 
 ### 3.1 MCP Gateway (IBM Context Forge)
 
 **Purpose**: Central management point for all MCP services
-**Endpoint**: http://localhost:4444
+**Endpoint**: http://localhost:8080
 **Features Used**:
 - MCP Server Registry
 - Virtual Server Composition
 - OAuth 2.1 Authentication Integration
 - Admin UI for configuration
 
-### 3.2 Duende Demo Server
+### 3.2 Local IdentityServer (IdP)
 
-**URL**: https://demo.duendesoftware.com/
-**Client Configuration**:
-- Client ID: `interactive.public`
-- Grant Type: Authorization Code
-- PKCE: Required
-- Allowed Scopes: `api`, `openid`, `profile`, `email`, `offline_access`
+**URL**: http://localhost:5001
+**Docker Internal URL**: http://idp:5000
 
-**Why interactive.public?**
-- No client secret required (suitable for SPAs and native apps)
-- Supports Authorization Code flow with PKCE for security
-- Easier demo setup without secret management
+**Test Users**:
+- `alice` / `alice` (Alice Smith)
+- `bob` / `bob` (Bob Smith)
+
+**Features**:
+- Dynamic Client Registration (DCR) enabled
+- Authorization Code + PKCE flow
+- OpenID Connect with profile claims
+
+**Scopes**:
+- `openid` - OpenID Connect
+- `profile` - User profile information
+- `mcp:tools` - MCP tools access
 
 **OAuth Endpoints**:
-- Discovery: `https://demo.duendesoftware.com/.well-known/openid-configuration`
-- Authorization: `https://demo.duendesoftware.com/connect/authorize`
-- Token: `https://demo.duendesoftware.com/connect/token`
+- Discovery: `http://localhost:5001/.well-known/openid-configuration`
+- Authorization: `http://localhost:5001/connect/authorize`
+- Token: `http://localhost:5001/connect/token`
+- DCR: `http://localhost:5001/connect/dcr`
 
 ### 3.3 HTTP MCP Server (JSONPlaceholder Integration)
 
@@ -99,11 +105,27 @@ This document describes the complete specification for a Model Context Protocol 
 - Requires API key (free tier available)
 - Supports multiple units (metric, imperial, standard)
 
-### 3.5 Virtual Server
+### 3.5 Public Remote MCP Servers
+
+In addition to local servers, these public remote MCP servers can be registered:
+
+| Server | URL | Description |
+|--------|-----|-------------|
+| Context7 | https://mcp.context7.com/mcp | Context7 MCP Server |
+| Kismet Travel | https://mcp.kismet.travel/mcp | Kismet Travel MCP Server |
+| Microsoft Learn | https://learn.microsoft.com/api/mcp | Microsoft Learn Documentation MCP |
+
+**Registration**:
+- Navigate to "Gateways" → "Register Gateway" in Admin UI
+- Enter the URL from the table above
+- Select protocol: "Streamable HTTP" or "SSE"
+- Gateway will auto-discover available tools
+
+### 3.6 Virtual Server
 
 **Purpose**: Combined interface exposing tools from both backends
 **Authentication**: OAuth 2.1 required
-**Endpoint**: http://localhost:4444/servers/{virtual-server-id}/mcp
+**Endpoint**: http://localhost:8080/servers/{virtual-server-id}/mcp
 
 **Combined Tools**:
 - All JSONPlaceholder tools (8 tools)
@@ -124,9 +146,9 @@ This document describes the complete specification for a Model Context Protocol 
    - Initializes gateway with default admin user
 
 2. **Verify Services**:
-   - Gateway health check: http://localhost:4444/health
+   - Gateway health check: http://localhost:8080/health
    - HTTP MCP health: http://localhost:8001/health
-   - Admin UI: http://localhost:4444/admin
+   - Admin UI: http://localhost:8080/admin
 
 ### Phase 2: Backend Configuration
 
@@ -162,16 +184,16 @@ This document describes the complete specification for a Model Context Protocol 
 **Step 4: Configure OAuth 2.1**
 - In Admin UI, navigate to virtual server settings
 - Configure authentication:
-  - Provider: `duende-demo`
-  - Discovery URL: `https://demo.duendesoftware.com/.well-known/openid-configuration`
-  - Client ID: `interactive.public`
-  - Redirect URI: `http://localhost:4444/auth/callback`
-  - Scopes: `openid profile email api`
+  - Provider: `local-idp`
+  - Discovery URL: `http://localhost:5001/.well-known/openid-configuration`
+  - Client ID: (dynamically registered via DCR, or configure manually)
+  - Redirect URI: `http://localhost:8080/auth/callback`
+  - Scopes: `openid profile mcp:tools`
 
 **Step 5: Test OAuth Flow**
-- Access virtual server endpoint: http://localhost:4444/servers/{uuid}/mcp
-- Redirects to Duende login page
-- User authenticates with demo credentials
+- Access virtual server endpoint: http://localhost:8080/servers/{uuid}/mcp
+- Redirects to local IdentityServer login page
+- User authenticates with test credentials (`alice`/`alice` or `bob`/`bob`)
 - Redirects back to gateway with access token
 - Tools now accessible with valid OAuth session
 
@@ -179,7 +201,7 @@ This document describes the complete specification for a Model Context Protocol 
 
 **Step 6: Configure Desktop Client**
 - Use MCP Inspector or configure in OpenCode Desktop
-- Server URL: `http://localhost:4444/servers/{uuid}/mcp`
+- Server URL: `http://localhost:8080/servers/{uuid}/mcp`
 - Authentication: OAuth flow handled automatically
 
 **Step 7: Test Integration**
@@ -223,9 +245,10 @@ This document describes the complete specification for a Model Context Protocol 
 **File**: `docker-compose.yml`
 
 **Services**:
-1. `mcp-gateway` - IBM Context Forge gateway
-2. `jsonplaceholder-mcp` - HTTP MCP server
-3. `weather-mcp` - HTTP MCP server for weather data
+1. `idp` - Local Duende IdentityServer (OAuth 2.1 provider)
+2. `mcp-gateway` - IBM Context Forge gateway
+3. `jsonplaceholder-mcp` - HTTP MCP server
+4. `weather-mcp` - HTTP MCP server for weather data
 
 ### 5.4 Startup Script
 
@@ -244,9 +267,9 @@ This document describes the complete specification for a Model Context Protocol 
 
 ### 6.1 OAuth Flow
 - Uses Authorization Code + PKCE (secure for public clients)
-- No client secret required (interactive.public)
-- Short-lived access tokens from Duende demo
-- Gateway validates tokens against Duende
+- Dynamic Client Registration (DCR) supported
+- Short-lived access tokens from local IdentityServer
+- Gateway validates tokens against local IdP (http://localhost:5001)
 
 ### 6.2 Backend Security
 - HTTP MCP server has no authentication (internal only)
@@ -271,7 +294,7 @@ npx -y @modelcontextprotocol/inspector
 
 **Configuration**:
 1. Start the inspector
-2. Enter server URL: `http://localhost:4444/servers/{uuid}/mcp`
+2. Enter server URL: `http://localhost:8080/servers/{uuid}/mcp`
 3. Complete OAuth flow when prompted
 4. Interact with available tools
 
@@ -284,10 +307,10 @@ npx -y @modelcontextprotocol/inspector
 {
   "mcpServers": {
     "demo-gateway": {
-      "url": "http://localhost:4444/servers/{uuid}/mcp",
+      "url": "http://localhost:8080/servers/{uuid}/mcp",
       "oauth": {
         "enabled": true,
-        "provider": "duende"
+        "provider": "local-idp"
       }
     }
   }
@@ -333,12 +356,12 @@ echo "[4/5] Waiting for services..."
 
 echo ""
 echo "=== Demo Ready ==="
-echo "Gateway Admin UI: http://localhost:4444/admin"
+echo "Gateway Admin UI: http://localhost:8080/admin"
 echo "Admin Email: admin@demo.local"
 echo "Admin Password: asdQWE!@#"
 echo ""
 echo "Next Steps:"
-echo "1. Open http://localhost:4444/admin"
+echo "1. Open http://localhost:8080/admin"
 echo "2. Log in with credentials above"
 echo "3. Follow the guided setup wizard"
 echo ""
@@ -374,7 +397,7 @@ curl http://localhost:8001/tools
 curl http://localhost:8002/tools
 
 # Test gateway API
-curl http://localhost:4444/health
+curl http://localhost:8080/health
 ```
 
 ## 10. References
@@ -389,6 +412,6 @@ curl http://localhost:4444/health
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-02-03
-**Status**: Specification Ready for Implementation
+**Document Version**: 1.1
+**Last Updated**: 2026-02-06
+**Status**: Specification Updated - Local IdentityServer Implemented

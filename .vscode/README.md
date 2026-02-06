@@ -49,12 +49,6 @@ uv pip install -e ".[dev]"
 pip install -e ".[dev]"
 ```
 
-### 5. Configure Pre-commit Hooks
-
-```bash
-uv run pre-commit install
-```
-
 ## 🛠️ Development Workflow
 
 ### Code Formatting

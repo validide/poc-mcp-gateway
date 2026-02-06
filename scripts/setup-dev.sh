@@ -6,8 +6,7 @@
 # 2. Installs uv package manager
 # 3. Creates virtual environment
 # 4. Installs dependencies
-# 5. Sets up pre-commit hooks
-# 6. Verifies installation
+# 5. Verifies installation
 
 set -euo pipefail
 
@@ -34,7 +33,7 @@ echo "╚═══════════════════════�
 echo -e "${NC}"
 
 # Step 1: Check Python version
-echo -e "${CYAN}[1/5] Checking Python version...${NC}"
+echo -e "${CYAN}[1/4] Checking Python version...${NC}"
 
 # Find Python 3.14+
 PYTHON_CMD=""
@@ -74,7 +73,7 @@ python_version=$("$PYTHON_CMD" --version 2>&1)
 echo -e "${GREEN}✓ Found: $python_version${NC}"
 
 # Step 2: Install uv
-echo -e "\n${CYAN}[2/5] Setting up uv package manager...${NC}"
+echo -e "\n${CYAN}[2/4] Setting up uv package manager...${NC}"
 
 if command -v uv &> /dev/null; then
     uv_version=$(uv --version 2>&1)
@@ -102,7 +101,7 @@ else
 fi
 
 # Step 3: Create virtual environment
-echo -e "\n${CYAN}[3/5] Creating virtual environment...${NC}"
+echo -e "\n${CYAN}[3/4] Creating virtual environment...${NC}"
 
 if [[ -d ".venv" ]]; then
     echo -e "${YELLOW}Existing .venv found, recreating...${NC}"
@@ -113,7 +112,7 @@ uv venv --python "$PYTHON_CMD"
 echo -e "${GREEN}✓ Virtual environment created${NC}"
 
 # Step 4: Install dependencies
-echo -e "\n${CYAN}[4/5] Installing dependencies...${NC}"
+echo -e "\n${CYAN}[4/4] Installing dependencies...${NC}"
 
 # Activate venv for subsequent commands
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
@@ -124,47 +123,6 @@ fi
 
 uv pip install -e ".[dev]"
 echo -e "${GREEN}✓ Dependencies installed${NC}"
-
-# Step 5: Set up pre-commit
-echo -e "\n${CYAN}[5/5] Setting up pre-commit hooks...${NC}"
-
-# Create pre-commit config if it doesn't exist
-if [[ ! -f ".pre-commit-config.yaml" ]]; then
-    cat > .pre-commit-config.yaml << 'EOF'
-# Pre-commit configuration for MCP Gateway Demo
-# See https://pre-commit.com for more information
-
-repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.0
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.0
-    hooks:
-      - id: mypy
-        additional_dependencies:
-          - pydantic>=2.12.0
-          - httpx>=0.28.0
-        args: [--ignore-missing-imports]
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-      - id: check-merge-conflict
-EOF
-    echo -e "${GREEN}✓ Created .pre-commit-config.yaml${NC}"
-fi
-
-pre-commit install
-echo -e "${GREEN}✓ Pre-commit hooks installed${NC}"
 
 # Verify installation
 echo -e "\n${BOLD}Verifying installation...${NC}"

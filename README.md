@@ -1,12 +1,12 @@
 # MCP Gateway Demo
 
-A complete demonstration of the Model Context Protocol (MCP) Gateway using IBM's Context Forge, featuring OAuth 2.1 authentication via Duende Demo Server and multiple MCP backends.
+A complete demonstration of the Model Context Protocol (MCP) Gateway using IBM's Context Forge, featuring OAuth 2.1 authentication via a local Duende IdentityServer and multiple MCP backends.
 
 ## 🎯 Overview
 
 This demo showcases:
 - **IBM MCP Context Forge** as the central gateway and registry
-- **Duende IdentityServer Demo** for OAuth 2.1 authentication
+- **Local Duende IdentityServer** for OAuth 2.1 authentication (with test users alice/bob)
 - **Two public MCP backends**:
   - HTTP-based MCP server fetching data from JSONPlaceholder API
   - Weather MCP server providing real-time weather data via OpenWeatherMap API
@@ -23,7 +23,7 @@ This demo showcases:
                        │ OAuth 2.1 + MCP Protocol
                        v
 ┌─────────────────────────────────────────────────────────────────┐
-│                   MCP Gateway (localhost:4444)                  │
+│                   MCP Gateway (localhost:8080)                  │
 │              IBM Context Forge - Admin UI & API                  │
 └──────────────────────┬──────────────────────────────────────────┘
                        │
@@ -84,8 +84,9 @@ Once started, you'll have access to:
 
 | Service | URL | Credentials |
 |---------|-----|---------------|
-| Gateway Admin UI | http://localhost:4444/admin | admin@demo.local / asdQWE!@# |
-| Gateway API | http://localhost:4444 | Bearer token via API |
+| Gateway Admin UI | http://localhost:8080/admin | admin@demo.local / asdQWE!@# |
+| Gateway API | http://localhost:8080 | Bearer token via API |
+| IdentityServer (IdP) | http://localhost:5001 | alice/alice or bob/bob |
 | JSONPlaceholder MCP | http://localhost:8001 | Direct access |
 | Weather MCP | http://localhost:8002 | Direct access |
 
@@ -99,7 +100,7 @@ The `start-demo.sh` script handles this phase automatically.
 
 #### Register JSONPlaceholder MCP
 
-1. Open http://localhost:4444/admin
+1. Open http://localhost:8080/admin
 2. Login with: `admin@demo.local` / `asdQWE!@#`
 3. Navigate to **"Gateways"** section
 4. Click **"Register Gateway"**
@@ -140,19 +141,21 @@ The `start-demo.sh` script handles this phase automatically.
 1. Find your virtual server and click **"Edit"**
 2. Navigate to **"Authentication"** tab
 3. Configure OAuth:
-   - **Provider**: `duende-demo`
-   - **Discovery URL**: `https://demo.duendesoftware.com/.well-known/openid-configuration`
-   - **Client ID**: `interactive.public`
-   - **Redirect URI**: `http://localhost:4444/auth/callback`
-   - **Scopes**: `openid profile email api`
+   - **Provider**: `local-idp`
+   - **Discovery URL**: `http://localhost:5001/.well-known/openid-configuration`
+   - **Client ID**: (dynamically registered via DCR)
+   - **Redirect URI**: `http://localhost:8080/auth/callback`
+   - **Scopes**: `openid profile mcp:tools`
 4. Click **Save**
+
+**Note**: The local IdentityServer supports Dynamic Client Registration (DCR), so clients can be registered automatically.
 
 ### Phase 5: Test OAuth Flow
 
-1. Visit: `http://localhost:4444/servers/{UUID}/mcp`
+1. Visit: `http://localhost:8080/servers/{UUID}/mcp`
    (replace `{UUID}` with your virtual server UUID)
-2. You'll be redirected to Duende login page
-3. Use any credentials (demo server accepts any login)
+2. You'll be redirected to the local IdentityServer login page
+3. Use test credentials: `alice` / `alice` (or `bob` / `bob`)
 4. After authentication, you'll have access to all 11 tools
 
 ### Phase 6: Test with MCP Clients
@@ -164,7 +167,7 @@ The `start-demo.sh` script handles this phase automatically.
    npx -y @modelcontextprotocol/inspector
    ```
 2. In the inspector interface:
-   - **Server URL**: `http://localhost:4444/servers/{UUID}/mcp`
+   - **Server URL**: `http://localhost:8080/servers/{UUID}/mcp`
    - Complete OAuth flow when prompted
 3. Test available tools:
    - Try `get_users` from JSONPlaceholder
@@ -176,12 +179,28 @@ The `start-demo.sh` script handles this phase automatically.
 2. Navigate to **MCP** section
 3. Add new server:
    - **Name**: `demo-gateway`
-   - **URL**: `http://localhost:4444/servers/{UUID}/mcp`
+   - **URL**: `http://localhost:8080/servers/{UUID}/mcp`
    - **OAuth**: Enabled
 4. Save and restart OpenCode
 5. On first use, complete OAuth flow in browser
 
 **Documentation**: https://docs.opencode.ai/clients/mcp
+
+## 🌐 Public Remote MCP Servers
+
+In addition to the local MCP servers, you can register these public remote MCP servers in the gateway:
+
+| Server | URL | Description |
+|--------|-----|-------------|
+| Context7 | https://mcp.context7.com/mcp | Context7 MCP Server |
+| Kismet Travel | https://mcp.kismet.travel/mcp | Kismet Travel MCP Server |
+| Microsoft Learn | https://learn.microsoft.com/api/mcp | Microsoft Learn Documentation MCP |
+
+To register a public MCP server:
+1. Open the Gateway Admin UI
+2. Navigate to "Gateways" → "Register Gateway"
+3. Enter the URL from the table above
+4. Select protocol: "Streamable HTTP" or "SSE"
 
 ## 🔧 Available Tools
 
@@ -216,6 +235,15 @@ mcp-gateway-demo/
 │   ├── settings.json           # Ruff, MyPy, Pylance settings
 │   ├── extensions.json         # Recommended extensions
 │   └── README.md               # VS Code setup guide
+├── idp/                         # Local IdentityServer (OAuth/OIDC)
+│   ├── IdentityServer.slnx     # .NET solution file
+│   └── IdentityServer/
+│       ├── Program.cs          # Entry point with Serilog
+│       ├── HostingExtensions.cs # DI and middleware setup
+│       ├── Config.cs           # OAuth scopes and resources
+│       ├── TestUsers.cs        # Test users (alice/bob)
+│       ├── Dockerfile          # Docker build
+│       └── Pages/              # Login, Consent, etc. UI
 ├── specs/
 │   └── SPECIFICATION.md         # Detailed specification document
 ├── mcp-servers/
@@ -237,6 +265,13 @@ mcp-gateway-demo/
 ```
 
 ## 🐳 Docker Services
+
+### IdentityServer (IdP)
+- **Build**: Local Dockerfile (`idp/IdentityServer`)
+- **Port**: 5001
+- **Features**: OAuth 2.1 / OpenID Connect provider
+- **Test Users**: alice/alice, bob/bob
+- **DCR**: Dynamic Client Registration enabled at `/connect/dcr`
 
 ### PostgreSQL Database
 - **Image**: `postgres:17`
@@ -272,9 +307,9 @@ mcp-gateway-demo/
 
 ### OAuth 2.1 Flow
 - Uses **Authorization Code + PKCE** (secure for public clients)
-- No client secret required (using `interactive.public` client)
-- Short-lived access tokens from Duende demo server
-- Gateway validates tokens against Duende
+- Dynamic Client Registration (DCR) supported
+- Short-lived access tokens from local IdentityServer
+- Gateway validates tokens against local IdP (http://localhost:5001)
 
 ### Backend Security
 - HTTP MCP server: No authentication (internal network only)
@@ -286,7 +321,8 @@ mcp-gateway-demo/
 - Hardcoded admin password (`asdQWE!@#`)
 - Predictable JWT secret key
 - Default PostgreSQL password (`postgres`)
-- Uses public Duende demo server
+- Local IdentityServer uses development signing keys (not for production)
+- Test users with simple passwords (alice/alice, bob/bob)
 - OpenWeatherMap API key in environment variable
 - Not suitable for production use without hardening
 
@@ -328,13 +364,15 @@ Individual components:
 
 ## 📝 Notes
 
-- Demo uses Duende's public demo server (https://demo.duendesoftware.com/)
-- Any login credentials work on the demo OAuth server
-- Data is not persisted between restarts (SQLite in container)
+- Demo uses a local Duende IdentityServer instance (http://localhost:5001)
+- Test users: `alice` / `alice` and `bob` / `bob`
+- IdentityServer supports Dynamic Client Registration (DCR) at `/connect/dcr`
+- Discovery document: http://localhost:5001/.well-known/openid-configuration
+- Data is not persisted between restarts (in-memory storage)
 - For production use, configure proper secrets and persistent storage
 
 ---
 
-**Last Updated**: 2026-02-03
+**Last Updated**: 2026-02-06
 **Demo Version**: 1.0
 **Status**: Ready for use

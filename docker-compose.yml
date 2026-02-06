@@ -1,6 +1,33 @@
 name: mcp-gateway-demo
 
 services:
+  # Local IdentityServer (OAuth 2.1 / OpenID Connect Provider)
+  idp:
+    build:
+      context: ./idp/IdentityServer
+      dockerfile: Dockerfile
+    image: mcp-idp:latest
+    container_name: mcp-idp
+    restart: unless-stopped
+    ports:
+      - "5001:5000"
+    environment:
+      ASPNETCORE_URLS: http://+:5000
+      ASPNETCORE_ENVIRONMENT: Development
+    networks:
+      - mcp-demo-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5000/.well-known/openid-configuration"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   # PostgreSQL Database
   postgres:
     image: postgres:17
@@ -69,17 +96,26 @@ services:
           cpus: '0.5'
           memory: 256M
 
-  # Nginx Reverse Proxy (RFC 9728 compliant path rewriting)
+  # Nginx Reverse Proxy (RFC 9728 compliant path rewriting + subdomain routing)
   nginx:
     image: nginx:1.27-alpine
     container_name: mcp-nginx
     restart: unless-stopped
     ports:
-      - "4444:80"
+      - "8080:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
     depends_on:
+      idp:
+        condition: service_healthy
       mcp-gateway:
+        condition: service_healthy
+      mcp-inspector:
+        condition: service_healthy
+      jsonplaceholder-mcp:
+        condition: service_healthy
+      weather-mcp:
         condition: service_healthy
     networks:
       - mcp-demo-network
@@ -103,15 +139,15 @@ services:
     expose:
       - "4444"
     environment:
-      # CORS Configuration - allow MCP Inspector and local development
-      ALLOWED_ORIGINS: '["http://localhost:4444","http://localhost:6274","http://localhost:6275","http://localhost:5173","http://localhost:3000","http://127.0.0.1:4444","http://127.0.0.1:6274"]'
+      # CORS Configuration - allow MCP Inspector, local development, and subdomain routing
+      ALLOWED_ORIGINS: '["http://localhost:8080","http://mcp-gateway.localhost:8080","http://gateway.localhost:8080","http://idp.localhost:8080","http://jsonplaceholder-mcp.localhost:8080","http://jsonplaceholder.localhost:8080","http://weather-mcp.localhost:8080","http://weather.localhost:8080","http://inspector.localhost:8080","http://mcp-inspector.localhost:8080","http://localhost:6274","http://localhost:6275","http://localhost:5173","http://localhost:3000","http://127.0.0.1:4444","http://127.0.0.1:6274"]'
       # Server Configuration
       HOST: 0.0.0.0
       PORT: 4444
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
       # Public URL for OAuth metadata discovery and callbacks
-      APP_DOMAIN: ${APP_DOMAIN:-http://localhost:4444}
+      APP_DOMAIN: ${APP_DOMAIN:-http://localhost:8080}
 
       # Admin UI & API
       MCPGATEWAY_UI_ENABLED: true
@@ -207,6 +243,34 @@ services:
     depends_on:
       mcp-gateway:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # MCP Inspector - Visual testing tool for MCP servers
+  mcp-inspector:
+    image: ghcr.io/modelcontextprotocol/inspector:latest
+    container_name: mcp-inspector
+    restart: unless-stopped
+    ports:
+      - "6274:6274"
+      - "6277:6277"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 6274
+      MCP_AUTO_OPEN_ENABLED: "false"
+      # Disable auth for demo purposes (token changes on each restart)
+      DANGEROUSLY_OMIT_AUTH: "true"
+    networks:
+      - mcp-demo-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:6274', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
