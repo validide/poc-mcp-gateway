@@ -40,6 +40,7 @@ services:
       - "3001:3001"    # Admin UI
     volumes:
       - ./gateway/config.yaml:/etc/agentgateway/config.yaml:ro
+      - ./gateway/petstore-openapi.json:/etc/agentgateway/petstore-openapi.json:ro
     command: ["-f", "/etc/agentgateway/config.yaml"]
     depends_on:
       idp:

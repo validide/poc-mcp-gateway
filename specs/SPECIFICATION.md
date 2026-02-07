@@ -5,8 +5,9 @@
 This document describes the complete specification for a Model Context Protocol (MCP) Gateway demo. The demo showcases:
 
 - **AgentGateway** as the central MCP gateway (https://agentgateway.dev/)
-- **Path-based routing** with 6 distinct MCP routes on a single port
+- **Path-based routing** with multiple distinct MCP routes on a single port
 - **Public routes** proxying to remote MCP servers (no authentication)
+- **OpenAPI-to-MCP translation** automatically exposing REST APIs (Swagger Petstore) as MCP tools
 - **Protected routes** with OAuth 2.1 + DCR via a local Duende IdentityServer
 - **Tool multiplexing** combining multiple backends through a single `/mixed` route
 - **Admin UI** for gateway monitoring and management
@@ -45,6 +46,8 @@ This document describes the complete specification for a Model Context Protocol 
     |  /context7   -> Context7    |
     |  /travel     -> Kismet      |
     |  /learn      -> MS Learn    |
+    |  /petstore   -> Petstore    |
+    |    (OpenAPI -> MCP auto)    |
     +--------------+--------------+
     |  Protected Routes (OAuth)   |
     |                             |
@@ -150,6 +153,33 @@ These are external MCP servers proxied through the gateway without authenticatio
 | `/travel/mcp` | https://mcp.kismet.travel/mcp | Travel planning |
 | `/learn/mcp` | https://learn.microsoft.com/api/mcp | Microsoft Learn docs |
 
+### 3.6 OpenAPI-to-MCP Translation (Public)
+
+AgentGateway can automatically translate any REST API with an OpenAPI specification into MCP tools.
+No custom MCP server code is required — the gateway reads the OpenAPI spec and exposes each operation as a tool.
+
+| Route | OpenAPI Spec | API Host | Description |
+|-------|-------------|----------|-------------|
+| `/petstore/mcp` | https://petstore.swagger.io/v2/swagger.json | https://petstore.swagger.io | Swagger Petstore demo API |
+
+**How it works**:
+1. The gateway loads the OpenAPI spec at startup from the mounted `schema.file`
+2. Each API operation (identified by `operationId`) becomes an MCP tool
+3. Request/response schemas from the spec define tool input/output
+4. When a tool is called, the gateway translates it to an HTTP request to the `host`
+5. Tools are prefixed with the target name (e.g., `petstore_addPet`)
+
+**Configuration**:
+```yaml
+- name: petstore
+  openapi:
+    schema:
+      file: /etc/agentgateway/petstore-openapi.json  # Mounted OpenAPI spec
+    host: https://petstore.swagger.io                # API server
+```
+
+See [AgentGateway OpenAPI docs](https://agentgateway.dev/docs/mcp/connect/openapi/) for details.
+
 ## 4. Gateway Configuration
 
 The gateway is configured via `gateway/config.yaml`:
@@ -162,7 +192,7 @@ binds:
 - port: 3000
   listeners:
   - routes:
-    # Public - remote MCP servers, no auth
+    # Public - remote MCP servers and OpenAPI specs, no auth
     - name: context7
       matches:
       - path:
@@ -270,6 +300,14 @@ All hostnames are served on port 8080 (mapped from container port 80).
 4. Connect — no authentication required
 5. Browse tools from Context7
 
+### Phase 2b: Test OpenAPI-to-MCP (Petstore)
+
+1. Set server URL: `http://gateway.localhost:8080/petstore/mcp`
+2. Select transport: Streamable HTTP
+3. Connect — no authentication required
+4. Browse auto-generated tools from the Swagger Petstore OpenAPI spec
+5. Every REST endpoint (pet, store, user operations) appears as an MCP tool
+
 ### Phase 3: Test Protected Routes
 
 1. Set server URL: `http://gateway.localhost:8080/placeholder/mcp`
@@ -313,7 +351,7 @@ This prevents naming conflicts when multiplexing multiple backends on the `/mixe
 
 ### 8.2 Public Routes
 - No authentication required
-- Traffic proxied directly to remote MCP servers
+- Traffic proxied directly to remote MCP servers or translated from OpenAPI specs
 - CORS configured to allow all origins (demo)
 
 ### 8.3 Backend Security
@@ -397,10 +435,12 @@ curl http://idp.localhost:8080/.well-known/openid-configuration
 - [OpenWeatherMap API Documentation](https://openweathermap.org/api)
 - [Model Context Protocol Specification](https://modelcontextprotocol.io/)
 - [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
+- [Swagger Petstore](https://petstore.swagger.io/) - Petstore demo API
+- [AgentGateway OpenAPI-to-MCP](https://agentgateway.dev/docs/mcp/connect/openapi/) - OpenAPI backend docs
 - [RFC 9728 - OAuth 2.0 Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728)
 
 ---
 
 **Document Version**: 3.0
-**Last Updated**: 2026-02-06
-**Status**: Updated for path-based routing with public/protected routes
+**Last Updated**: 2026-02-07
+**Status**: Updated with OpenAPI-to-MCP (Petstore) and path-based routing with public/protected routes

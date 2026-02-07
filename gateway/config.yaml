@@ -2,7 +2,7 @@
 # https://agentgateway.dev/
 #
 # Routes:
-#   Public (no auth):     /context7, /travel, /learn
+#   Public (no auth):     /context7, /travel, /learn, /petstore
 #   Protected (OAuth+DCR): /placeholder, /weather, /mixed,
 #                          /b2b/dev/docs, /b2c/travel/booking
 #
@@ -60,6 +60,23 @@ binds:
           - name: microsoft-learn
             mcp:
               host: https://learn.microsoft.com/api/mcp
+
+    # Swagger Petstore - OpenAPI to MCP auto-translation (public, no auth)
+    # Demonstrates automatic REST API → MCP tool conversion using an OpenAPI spec.
+    # Every Petstore endpoint (pet, store, user) becomes an MCP tool automatically.
+    # See: https://agentgateway.dev/docs/mcp/connect/openapi/
+    - name: petstore
+      matches:
+      - path:
+          pathPrefix: /petstore
+      backends:
+      - mcp:
+          targets:
+          - name: petstore
+            openapi:
+              schema:
+                file: /etc/agentgateway/petstore-openapi.json
+              host: https://petstore.swagger.io
 
     # JSONPlaceholder (public, no auth)
     - name: placeholder-public

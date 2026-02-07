@@ -8,6 +8,7 @@ This demo showcases:
 - **AgentGateway** as the central MCP gateway (https://agentgateway.dev/)
 - **Path-based routing** with 6 distinct MCP routes on a single endpoint
 - **Public routes** proxying to remote MCP servers (Context7, Kismet Travel, Microsoft Learn)
+- **OpenAPI-to-MCP translation** automatically exposing the Swagger Petstore REST API as MCP tools
 - **Protected routes** with OAuth 2.1 + DCR for local MCP backends (JSONPlaceholder, Weather)
 - **Tool multiplexing** combining multiple backends through a single `/mixed` route
 - **Local Duende IdentityServer** for OAuth 2.1 authentication (with test users alice/bob)
@@ -49,6 +50,13 @@ This demo showcases:
   | (remote)   |  | Travel     |  | Learn       |          |
   |            |  | (remote)   |  | (remote)    |          |
   +------------+  +------------+  +-------------+          |
+         |                                                 |
+         v                                                 |
+  +-------------------+                                    |
+  | Swagger Petstore  |                                    |
+  | (OpenAPI -> MCP)  |                                    |
+  | (remote)          |                                    |
+  +-------------------+                                    |
          |                                                 |
          +------ Protected (OAuth+DCR) ---+                |
          |                |               |                |
@@ -112,6 +120,7 @@ All routes are served through the gateway at `http://gateway.localhost:8080`.
 | Context7 | `/context7/mcp` | https://mcp.context7.com/mcp |
 | Kismet Travel | `/travel/mcp` | https://mcp.kismet.travel/mcp |
 | Microsoft Learn | `/learn/mcp` | https://learn.microsoft.com/api/mcp |
+| Swagger Petstore | `/petstore/mcp` | OpenAPI auto-translation from https://petstore.swagger.io |
 
 ### Protected Routes (OAuth 2.1 + DCR)
 
@@ -139,7 +148,7 @@ binds:
 - port: 3000
   listeners:
   - routes:
-    # Public - no auth, proxied to remote MCP servers
+    # Public - no auth, proxied to remote MCP servers or OpenAPI specs
     - name: context7
       matches:
       - path:
@@ -150,6 +159,20 @@ binds:
           - name: context7
             mcp:
               host: https://mcp.context7.com/mcp
+
+    # Public - OpenAPI to MCP auto-translation
+    - name: petstore
+      matches:
+      - path:
+          pathPrefix: /petstore
+      backends:
+      - mcp:
+          targets:
+          - name: petstore
+            openapi:
+              schema:
+                file: /etc/agentgateway/petstore-openapi.json
+              host: https://petstore.swagger.io
 
     # Protected - OAuth 2.1 with DCR
     - name: placeholder
@@ -188,6 +211,7 @@ AgentGateway automatically prefixes tools with their backend name to avoid confl
 1. Open MCP Inspector at http://inspector.localhost:8080
 2. Set server URL to a gateway route:
    - Public: `http://gateway.localhost:8080/context7/mcp`
+   - Public (OpenAPI): `http://gateway.localhost:8080/petstore/mcp`
    - Protected: `http://gateway.localhost:8080/placeholder/mcp`
 3. Select transport: Streamable HTTP
 4. Connect and browse available tools
@@ -214,6 +238,32 @@ AgentGateway automatically prefixes tools with their backend name to avoid confl
 | `weather_get_current` | Get current weather for a location | `location` (string, required), `units` (string, optional) |
 | `weather_get_forecast` | Get weather forecast for a location | `location` (string, required), `days` (integer, optional), `units` (string, optional) |
 | `weather_search_location` | Search for location coordinates | `query` (string, required) |
+
+### Swagger Petstore Tools (auto-generated) — via `/petstore/mcp`
+
+These tools are **automatically generated** from the [Petstore API spec](https://petstore.swagger.io/v2/swagger.json) by AgentGateway's [OpenAPI-to-MCP](https://agentgateway.dev/docs/mcp/connect/openapi/) feature. No custom MCP server code is needed.
+
+| Tool | Description | HTTP Method |
+|------|-------------|-------------|
+| `petstore_addPet` | Add a new pet to the store | POST /pet |
+| `petstore_updatePet` | Update an existing pet | PUT /pet |
+| `petstore_findPetsByStatus` | Find pets by status | GET /pet/findByStatus |
+| `petstore_findPetsByTags` | Find pets by tags | GET /pet/findByTags |
+| `petstore_getPetById` | Find pet by ID | GET /pet/{petId} |
+| `petstore_updatePetWithForm` | Update pet with form data | POST /pet/{petId} |
+| `petstore_deletePet` | Delete a pet | DELETE /pet/{petId} |
+| `petstore_uploadFile` | Upload pet image | POST /pet/{petId}/uploadImage |
+| `petstore_getInventory` | Returns pet inventories by status | GET /store/inventory |
+| `petstore_placeOrder` | Place an order for a pet | POST /store/order |
+| `petstore_getOrderById` | Find purchase order by ID | GET /store/order/{orderId} |
+| `petstore_deleteOrder` | Delete purchase order by ID | DELETE /store/order/{orderId} |
+| `petstore_createUser` | Create user | POST /user |
+| `petstore_createUsersWithListInput` | Create list of users | POST /user/createWithList |
+| `petstore_loginUser` | Log user into the system | GET /user/login |
+| `petstore_logoutUser` | Log out current user | GET /user/logout |
+| `petstore_getUserByName` | Get user by username | GET /user/{username} |
+| `petstore_updateUser` | Update user | PUT /user/{username} |
+| `petstore_deleteUser` | Delete user | DELETE /user/{username} |
 
 ### Mixed (all 11 tools) — via `/mixed/mcp`
 
@@ -287,8 +337,8 @@ mcp-gateway-demo/
 - Only `/placeholder`, `/weather`, and `/mixed` routes require authentication
 
 ### Public Routes
-- `/context7`, `/travel`, and `/learn` routes have no authentication
-- Traffic is proxied directly to remote MCP servers
+- `/context7`, `/travel`, `/learn`, and `/petstore` routes have no authentication
+- Traffic is proxied directly to remote MCP servers or translated from OpenAPI specs
 
 ### Demo Security Warnings
 **Important**: This is a demo environment with the following limitations:
@@ -306,6 +356,8 @@ mcp-gateway-demo/
 - [Duende IdentityServer](https://docs.duendesoftware.com/) - OAuth/OIDC documentation
 - [JSONPlaceholder](https://jsonplaceholder.typicode.com/guide/) - Fake REST API guide
 - [OpenWeatherMap API](https://openweathermap.org/api) - Weather API documentation
+- [Swagger Petstore](https://petstore.swagger.io/) - Petstore demo API
+- [AgentGateway OpenAPI-to-MCP](https://agentgateway.dev/docs/mcp/connect/openapi/) - OpenAPI backend docs
 - [Model Context Protocol](https://modelcontextprotocol.io/) - MCP specification
 
 ## Troubleshooting
@@ -350,6 +402,6 @@ Individual components:
 
 ---
 
-**Last Updated**: 2026-02-06
+**Last Updated**: 2026-02-07
 **Gateway**: AgentGateway
 **Status**: Ready for use
