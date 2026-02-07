@@ -3,7 +3,8 @@
 #
 # Routes:
 #   Public (no auth):     /context7, /travel, /learn
-#   Protected (OAuth+DCR): /placeholder, /weather, /mixed
+#   Protected (OAuth+DCR): /placeholder, /weather, /mixed,
+#                          /b2b/dev/docs, /b2c/travel/booking
 #
 # NOTE: CORS is handled entirely by nginx to avoid duplicate headers
 # from remote MCP servers that set their own CORS headers.
@@ -169,6 +170,68 @@ binds:
             url: http://idp:5000/.well-known/openid-configuration/jwks
           resourceMetadata:
             resource: https://gateway.localhost:8080/mixed/mcp
+            scopesSupported:
+            - mcp:tools
+            bearerMethodsSupported:
+            - header
+          mode: strict
+
+    # B2B Dev Docs - Microsoft Learn + JSONPlaceholder
+    - name: b2b-dev-docs
+      matches:
+      - path:
+          pathPrefix: /b2b/dev/docs
+      - path:
+          exact: /.well-known/oauth-protected-resource/b2b/dev/docs/mcp
+      backends:
+      - mcp:
+          targets:
+          - name: microsoft-learn
+            mcp:
+              host: https://learn.microsoft.com/api/mcp
+          - name: jsonplaceholder
+            mcp:
+              host: http://jsonplaceholder-mcp:8001/mcp
+      policies:
+        mcpAuthentication:
+          issuer: https://idp.localhost:8080
+          audiences:
+          - https://gateway.localhost:8080/b2b/dev/docs/mcp
+          jwks:
+            url: http://idp:5000/.well-known/openid-configuration/jwks
+          resourceMetadata:
+            resource: https://gateway.localhost:8080/b2b/dev/docs/mcp
+            scopesSupported:
+            - mcp:tools
+            bearerMethodsSupported:
+            - header
+          mode: strict
+
+    # B2C Travel Booking - Weather + Kismet Travel
+    - name: b2c-travel-booking
+      matches:
+      - path:
+          pathPrefix: /b2c/travel/booking
+      - path:
+          exact: /.well-known/oauth-protected-resource/b2c/travel/booking/mcp
+      backends:
+      - mcp:
+          targets:
+          - name: weather
+            mcp:
+              host: http://weather-mcp:8002/mcp
+          - name: kismet-travel
+            mcp:
+              host: https://mcp.kismet.travel/mcp
+      policies:
+        mcpAuthentication:
+          issuer: https://idp.localhost:8080
+          audiences:
+          - https://gateway.localhost:8080/b2c/travel/booking/mcp
+          jwks:
+            url: http://idp:5000/.well-known/openid-configuration/jwks
+          resourceMetadata:
+            resource: https://gateway.localhost:8080/b2c/travel/booking/mcp
             scopesSupported:
             - mcp:tools
             bearerMethodsSupported:
