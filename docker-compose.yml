@@ -74,6 +74,8 @@ services:
         condition: service_healthy
       weather-mcp:
         condition: service_healthy
+      mcp-inspector:
+        condition: service_healthy
     networks:
       - mcp-demo-network
     healthcheck:
@@ -141,6 +143,33 @@ services:
       - mcp-demo-network
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(5); s.connect(('localhost',8002)); s.close()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # MCP Inspector
+  mcp-inspector:
+    image: ghcr.io/modelcontextprotocol/inspector:latest
+    container_name: mcp-inspector
+    restart: unless-stopped
+    ports:
+      - "6274:6274"    # Client UI
+      - "6277:6277"    # Proxy server
+    environment:
+      HOST: 0.0.0.0
+      MCP_AUTO_OPEN_ENABLED: "false"
+      # Accept self-signed certificates from nginx (dev only)
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+    networks:
+      - mcp-demo-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:6274',(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -25,7 +25,7 @@ echo "========================================================"
 echo -e "${NC}"
 
 # Check Docker
-echo -e "${CYAN}[1/4] Checking prerequisites...${NC}"
+echo -e "${CYAN}[1/3] Checking prerequisites...${NC}"
 
 if ! command -v docker &> /dev/null; then
     echo -e "${RED}x Docker not found. Please install Docker.${NC}"
@@ -65,12 +65,12 @@ else
 fi
 
 # Build images
-echo -e "\n${CYAN}[2/4] Building images...${NC}"
+echo -e "\n${CYAN}[2/3] Building images...${NC}"
 $COMPOSE_CMD build --parallel
 echo -e "${GREEN}+ Images built${NC}"
 
 # Start all services
-echo -e "\n${CYAN}[3/4] Starting services...${NC}"
+echo -e "\n${CYAN}[3/3] Starting services...${NC}"
 $COMPOSE_CMD up -d
 echo -e "${GREEN}+ Services started${NC}"
 
@@ -87,6 +87,7 @@ echo -e "\n${BOLD}Main Services (via nginx):${NC}"
 echo -e "  ${CYAN}Gateway MCP:${NC}      https://gateway.localhost:8080"
 echo -e "  ${CYAN}Gateway Admin UI:${NC} https://gateway-ui.localhost:8080"
 echo -e "  ${CYAN}IdentityServer:${NC}   https://idp.localhost:8080"
+echo -e "  ${CYAN}MCP Inspector:${NC}    https://inspector.localhost:8080"
 echo -e "  ${CYAN}JSONPlaceholder:${NC}  https://jsonplaceholder.localhost:8080"
 echo -e "  ${CYAN}Weather:${NC}          https://weather.localhost:8080"
 
@@ -94,6 +95,7 @@ echo -e "\n${BOLD}Direct Access:${NC}"
 echo -e "  ${CYAN}Gateway MCP:${NC}      http://localhost:3000"
 echo -e "  ${CYAN}Gateway Admin UI:${NC} http://localhost:3001"
 echo -e "  ${CYAN}IdentityServer:${NC}   http://localhost:5001"
+echo -e "  ${CYAN}MCP Inspector:${NC}    http://localhost:6274"
 echo -e "  ${CYAN}JSONPlaceholder:${NC}  http://localhost:8001"
 echo -e "  ${CYAN}Weather:${NC}          http://localhost:8002"
 
@@ -120,14 +122,21 @@ echo "  Check status: docker compose ps"
 
 echo ""
 
-# Launch MCP Inspector (without auto-opening browser)
-echo -e "${CYAN}[4/4] Launching MCP Inspector...${NC}"
-echo -e "${YELLOW}Open http://localhost:6274 in your browser.${NC}"
-echo -e "${YELLOW}Set server URL to: https://gateway.localhost:8080/context7/mcp${NC}"
+echo -e "\n${BOLD}MCP Inspector:${NC}"
+# Extract the auth token from the inspector logs (retry a few times while it starts)
+INSPECTOR_TOKEN=""
+for i in 1 2 3 4 5; do
+    INSPECTOR_TOKEN=$($COMPOSE_CMD logs mcp-inspector 2>/dev/null | grep -oP 'MCP_PROXY_AUTH_TOKEN=\K[a-f0-9]+' | tail -1)
+    [ -n "$INSPECTOR_TOKEN" ] && break
+    sleep 2
+done
+if [ -n "$INSPECTOR_TOKEN" ]; then
+    echo -e "  ${CYAN}URL:${NC}   ${GREEN}http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=${INSPECTOR_TOKEN}${NC}"
+    echo -e "  ${CYAN}Token:${NC} ${GREEN}${INSPECTOR_TOKEN}${NC}"
+else
+    echo -e "  ${YELLOW}Token not yet available. Check logs: $COMPOSE_CMD logs mcp-inspector${NC}"
+fi
+echo -e "  ${YELLOW}Set server URL to: https://gateway.localhost:8080/context7/mcp${NC}"
 echo ""
 echo -e "${YELLOW}NOTE: Before connecting, accept the self-signed certificate by${NC}"
 echo -e "${YELLOW}visiting https://gateway.localhost:8080 in your browser first.${NC}"
-echo ""
-# NODE_TLS_REJECT_UNAUTHORIZED=0 allows the Inspector proxy to connect
-# to nginx's self-signed certificate (dev only)
-NODE_TLS_REJECT_UNAUTHORIZED=0 BROWSER=none npx @modelcontextprotocol/inspector
