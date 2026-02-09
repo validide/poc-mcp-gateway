@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/idp/">
+    <Project Path="idp/IdentityServer/IdentityServer.csproj" />
+  </Folder>
+</Solution>

@@ -1,9 +1,12 @@
 using System.Globalization;
-using System.Net;
 using Duende.IdentityServer;
 using Duende.IdentityServer.Configuration;
-using Duende.IdentityServer.Configuration.Validation.DynamicClientRegistration;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Duende.IdentityServer.Configuration.EntityFramework;
+using Duende.IdentityServer.Configuration.RequestProcessing;
+using Duende.IdentityServer.EntityFramework.DbContexts;
+using Duende.IdentityServer.EntityFramework.Interfaces;
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Filters;
@@ -60,17 +63,22 @@ internal static class HostingExtensions
             options.KnownProxies.Clear();
         });
 
-        // builder.Services.TryAddTransient<IDynamicClientRegistrationValidator, DynamicClientRegistrationValidator>();
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
         var isBuilder = builder.Services.AddIdentityServer(options =>
                     {
-                        // this will add the default dynamic client registration endpoint to the discovery/metadatada documents
-                        options.Discovery.DynamicClientRegistration.RegistrationEndpointMode = RegistrationEndpointMode.Inferred;
+                        // Fixed issuer so tokens are valid regardless of whether the request
+                        // arrived via nginx (public) or direct container-to-container (internal)
+                        options.IssuerUri = "https://idp.localhost:8080";
 
                         options.Events.RaiseErrorEvents = true;
                         options.Events.RaiseInformationEvents = true;
                         options.Events.RaiseFailureEvents = true;
                         options.Events.RaiseSuccessEvents = true;
+
+                        // Advertise the DCR endpoint in discovery
+                        options.Discovery.DynamicClientRegistration.RegistrationEndpointMode =
+                            RegistrationEndpointMode.Inferred;
 
                         // Use a large chunk size for diagnostic logs in development where it will be redirected to a local file
                         if (builder.Environment.IsDevelopment())
@@ -81,18 +89,33 @@ internal static class HostingExtensions
                     .AddTestUsers(TestUsers.Users)
                     .AddLicenseSummary();
 
-        // in-memory, code config
-        isBuilder.AddInMemoryIdentityResources(Config.IdentityResources);
-        isBuilder.AddInMemoryApiScopes(Config.ApiScopes);
-        // since this will use DCR, we do not need any pre-configured clients
-        isBuilder.AddInMemoryClients([]);
-        isBuilder.AddInMemoryApiResources(Config.ApiResources);
+        isBuilder.AddConfigurationStore(options =>
+        {
+            options.ConfigureDbContext = b =>
+                b.UseSqlite(connectionString, sql => sql.MigrationsAssembly(typeof(Program).Assembly.GetName().Name));
+        });
 
-        builder.Services.AddIdentityServerConfiguration(_ => { })
-            // in memory is being used here to keep the demo simple. in a real scenario, a persistent storage
-            // mechanism is needed for client registrations to persist across application restarts
-            .AddInMemoryClientConfigurationStore();
+        isBuilder.AddOperationalStore(options =>
+        {
+            options.ConfigureDbContext = b =>
+                b.UseSqlite(connectionString, sql => sql.MigrationsAssembly(typeof(Program).Assembly.GetName().Name));
+            options.EnableTokenCleanup = true;
+        });
 
+        // DCR with EF-backed client store — registered clients start disabled
+        builder.Services
+            .AddIdentityServerConfiguration(options => { })
+            .AddClientConfigurationStore();
+
+        builder.Services.AddScoped<IConfigurationDbContext>(sp =>
+            sp.GetRequiredService<ConfigurationDbContext>());
+
+        // Decorate the default processor so newly registered clients are disabled and get default scopes
+        builder.Services.AddScoped<DynamicClientRegistrationRequestProcessor>();
+        builder.Services.AddScoped<IDynamicClientRegistrationRequestProcessor, CustomDynamicClientRegistrationRequestProcessor>();
+
+        // Background cleanup of unapproved DCR clients older than 1 hour
+        builder.Services.AddHostedService<DcrCleanupService>();
 
         builder.Services.AddAuthentication()
             .AddOpenIdConnect("oidc", "Sign-in with demo.duendesoftware.com", options =>
@@ -131,6 +154,31 @@ internal static class HostingExtensions
 
         app.UseStaticFiles();
         app.UseRouting();
+
+        // Intercept /connect/authorize for disabled clients — redirect to approval page
+        // instead of letting IdentityServer return "unauthorized_client"
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/connect/authorize")
+                && context.Request.Query.TryGetValue("client_id", out var clientIdValues))
+            {
+                var clientId = clientIdValues.ToString();
+                var configDb = context.RequestServices.GetRequiredService<ConfigurationDbContext>();
+                var client = await configDb.Clients.AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.ClientId == clientId);
+
+                if (client is { Enabled: false })
+                {
+                    var returnUrl = context.Request.GetEncodedUrl();
+                    var approvalUrl = $"/ClientApproval?returnUrl={Uri.EscapeDataString(returnUrl)}";
+                    context.Response.Redirect(approvalUrl);
+                    return;
+                }
+            }
+
+            await next();
+        });
+
         app.UseIdentityServer();
         app.UseAuthorization();
 

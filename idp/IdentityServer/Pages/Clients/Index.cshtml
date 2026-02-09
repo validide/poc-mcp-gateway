@@ -1,0 +1,67 @@
+@page
+@model IdentityServer.Pages.Clients.Index
+@using IdentityServer.Pages.Clients
+@{
+    var pending = Model.View.Clients.Where(c => c.Status == ClientStatus.PendingApproval);
+    var active = Model.View.Clients.Where(c => c.Status == ClientStatus.Active);
+    var expired = Model.View.Clients.Where(c => c.Status == ClientStatus.Expired);
+}
+
+<div class="clients-page">
+    <div class="lead">
+        <h1>Clients</h1>
+        <p>All client applications registered with this identity provider.</p>
+    </div>
+
+    @* --- Pending Approval ------------------------------------------------- *@
+    <h4>
+        Pending Approval
+        <span class="badge badge-warning">@pending.Count()</span>
+    </h4>
+    @if (!pending.Any())
+    {
+        <div class="alert alert-info mb-4">No clients pending approval.</div>
+    }
+    else
+    {
+        foreach (var client in pending)
+        {
+            @await Html.PartialAsync("_ClientCard", (client, "pending"))
+        }
+    }
+
+    @* --- Active ----------------------------------------------------------- *@
+    <h4 class="mt-4">
+        Active
+        <span class="badge badge-success">@active.Count()</span>
+    </h4>
+    @if (!active.Any())
+    {
+        <div class="alert alert-info mb-4">No active clients.</div>
+    }
+    else
+    {
+        foreach (var client in active)
+        {
+            @await Html.PartialAsync("_ClientCard", (client, "active"))
+        }
+    }
+
+    @* --- Expired ---------------------------------------------------------- *@
+    <h4 class="mt-4">
+        Expired
+        <span class="badge badge-secondary">@expired.Count()</span>
+    </h4>
+    @if (!expired.Any())
+    {
+        <div class="alert alert-info mb-4">No expired clients.</div>
+    }
+    else
+    {
+        <p class="text-muted">These clients were never approved and have passed the 1-hour window. They will be removed automatically.</p>
+        foreach (var client in expired)
+        {
+            @await Html.PartialAsync("_ClientCard", (client, "expired"))
+        }
+    }
+</div>

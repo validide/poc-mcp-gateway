@@ -1,0 +1,106 @@
+@page
+@model IdentityServer.Pages.ClientApproval.Index
+@{
+}
+
+<div class="clients-page">
+    <div class="lead">
+        <h1>Client Approval</h1>
+        @if (!string.IsNullOrEmpty(Model.View.ReturnUrl))
+        {
+            <p>A new client is requesting access. Review the details below and approve to continue, or deny to reject the request.</p>
+        }
+        else
+        {
+            <p>Clients registered via Dynamic Client Registration are listed below. Approve a client to allow it to obtain tokens, or deny to delete it.</p>
+        }
+    </div>
+
+    @if (!Model.View.PendingClients.Any())
+    {
+        <div class="row">
+            <div class="col-sm-8">
+                <div class="alert alert-info">
+                    No clients pending approval
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        foreach (var client in Model.View.PendingClients)
+        {
+            <div class="card mb-3">
+                <div class="card-header">
+                    <div class="row align-items-center">
+                        <div class="col-sm-6 card-title mb-0">
+                            <strong>@client.ClientName</strong>
+                        </div>
+                        <div class="col-sm-6 text-right">
+                            <form method="post" style="display:inline">
+                                <input type="hidden" name="ClientDbId" value="@client.Id" />
+                                @if (!string.IsNullOrEmpty(Model.View.ReturnUrl))
+                                {
+                                    <input type="hidden" name="ReturnUrl" value="@Model.View.ReturnUrl" />
+                                }
+                                <button class="btn btn-success btn-sm" asp-page-handler="Approve">Approve</button>
+                                <button class="btn btn-danger btn-sm" asp-page-handler="Deny">Deny</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <label>Client ID:</label> <code>@client.ClientId</code>
+                    </li>
+                    @if (!string.IsNullOrEmpty(client.ClientUri))
+                    {
+                        <li class="list-group-item">
+                            <label>Client URI:</label> @client.ClientUri
+                        </li>
+                    }
+                    @if (client.RedirectUris.Any())
+                    {
+                        <li class="list-group-item">
+                            <label>Redirect URIs</label>
+                            <ul>
+                                @foreach (var uri in client.RedirectUris)
+                                {
+                                    <li><code>@uri</code></li>
+                                }
+                            </ul>
+                        </li>
+                    }
+                    @if (client.AllowedGrantTypes.Any())
+                    {
+                        <li class="list-group-item">
+                            <label>Grant Types</label>
+                            <ul>
+                                @foreach (var gt in client.AllowedGrantTypes)
+                                {
+                                    <li>@gt</li>
+                                }
+                            </ul>
+                        </li>
+                    }
+                    @if (client.AllowedScopes.Any())
+                    {
+                        <li class="list-group-item">
+                            <label>Scopes</label>
+                            <ul>
+                                @foreach (var scope in client.AllowedScopes)
+                                {
+                                    <li>@scope</li>
+                                }
+                            </ul>
+                        </li>
+                    }
+                    <li class="list-group-item">
+                        <label>Registered:</label> @client.Created.ToString("yyyy-MM-dd HH:mm")
+                    </li>
+                </ul>
+            </div>
+        }
+    }
+</div>

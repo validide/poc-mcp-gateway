@@ -21,6 +21,8 @@ try
 
     if (app.Environment.IsDevelopment())
     {
+        SeedData.EnsureSeedData(app);
+
         app.Lifetime.ApplicationStopping.Register(() =>
         {
             var usage = app.Services.GetRequiredService<LicenseUsageSummary>();

@@ -12,6 +12,8 @@ services:
     restart: unless-stopped
     ports:
       - "5001:5000"
+    volumes:
+      - idp-data:/data
     environment:
       ASPNETCORE_URLS: http://+:5000
       ASPNETCORE_ENVIRONMENT: Development
@@ -55,6 +57,45 @@ services:
           cpus: '1.0'
           memory: 512M
 
+  # OAuth2 Proxy (SSO sidecar for Admin UI)
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
+    container_name: mcp-oauth2-proxy
+    restart: unless-stopped
+    command:
+      - --http-address=0.0.0.0:4180
+      - --provider=oidc
+      - --client-id=gateway-admin-ui
+      - --client-secret=gateway-admin-secret
+      - --redirect-url=https://gateway-ui.localhost:8080/oauth2/callback
+      - --skip-oidc-discovery=true
+      - --login-url=https://idp.localhost:8080/connect/authorize
+      - --redeem-url=http://idp:5000/connect/token
+      - --oidc-jwks-url=http://idp:5000/.well-known/openid-configuration/jwks
+      - --profile-url=http://idp:5000/connect/userinfo
+      - --oidc-issuer-url=https://idp.localhost:8080
+      - --ssl-insecure-skip-verify=true
+      - --email-domain=*
+      - --reverse-proxy=true
+      - --set-xauthrequest=true
+      - --skip-provider-button=true
+      - --cookie-name=_oauth2_proxy
+      - --cookie-domain=gateway-ui.localhost
+      - --cookie-secure=true
+      - --cookie-samesite=lax
+      - --cookie-secret=0123456789abcdef0123456789abcdef
+      - --scope=openid profile email
+    depends_on:
+      idp:
+        condition: service_healthy
+    networks:
+      - mcp-demo-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+
   # Nginx Reverse Proxy
   nginx:
     image: nginx:1.27-alpine
@@ -70,6 +111,8 @@ services:
       idp:
         condition: service_healthy
       mcp-gateway:
+        condition: service_started
+      oauth2-proxy:
         condition: service_started
       jsonplaceholder-mcp:
         condition: service_healthy
@@ -180,6 +223,9 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+
+volumes:
+  idp-data:
 
 networks:
   mcp-demo-network:

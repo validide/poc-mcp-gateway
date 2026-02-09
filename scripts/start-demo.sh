@@ -85,7 +85,7 @@ echo -e "${YELLOW}Services are starting up. Use 'docker compose ps' to check sta
 
 echo -e "\n${BOLD}Main Services (via nginx):${NC}"
 echo -e "  ${CYAN}Gateway MCP:${NC}      https://gateway.localhost:8080"
-echo -e "  ${CYAN}Gateway Admin UI:${NC} https://gateway-ui.localhost:8080"
+echo -e "  ${CYAN}Gateway Admin UI:${NC} https://gateway-ui.localhost:8080  ${YELLOW}(SSO login: alice / alice)${NC}"
 echo -e "  ${CYAN}IdentityServer:${NC}   https://idp.localhost:8080"
 echo -e "  ${CYAN}MCP Inspector:${NC}    https://inspector.localhost:8080"
 echo -e "  ${CYAN}JSONPlaceholder:${NC}  https://jsonplaceholder.localhost:8080"

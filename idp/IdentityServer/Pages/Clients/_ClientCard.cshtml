@@ -1,0 +1,95 @@
+@using IdentityServer.Pages.Clients
+@model (ClientViewModel Client, string Section)
+@{
+    var client = Model.Client;
+    var section = Model.Section;
+
+    var borderClass = section switch
+    {
+        "pending" => "border-warning",
+        "active" => "border-success",
+        "expired" => "border-secondary",
+        _ => ""
+    };
+}
+
+<div class="card mb-3 @borderClass">
+    <div class="card-header">
+        <div class="row align-items-center">
+            <div class="col-sm-6 card-title mb-0">
+                <strong>@client.ClientName</strong>
+            </div>
+            <div class="col-sm-6 text-right">
+                <form method="post" style="display:inline">
+                    <input type="hidden" name="ClientDbId" value="@client.Id" />
+                    @if (section == "pending")
+                    {
+                        <button class="btn btn-success btn-sm" asp-page-handler="Approve">Approve</button>
+                        <button class="btn btn-danger btn-sm" asp-page-handler="Delete">Delete</button>
+                    }
+                    else if (section == "active")
+                    {
+                        <button class="btn btn-warning btn-sm" asp-page-handler="Disable">Disable</button>
+                        <button class="btn btn-danger btn-sm" asp-page-handler="Delete">Delete</button>
+                    }
+                    else if (section == "expired")
+                    {
+                        <button class="btn btn-success btn-sm" asp-page-handler="Approve">Approve</button>
+                        <button class="btn btn-danger btn-sm" asp-page-handler="Delete">Delete</button>
+                    }
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <ul class="list-group list-group-flush">
+        <li class="list-group-item">
+            <label>Client ID:</label> <code>@client.ClientId</code>
+        </li>
+        @if (!string.IsNullOrEmpty(client.ClientUri))
+        {
+            <li class="list-group-item">
+                <label>Client URI:</label> @client.ClientUri
+            </li>
+        }
+        @if (client.RedirectUris.Any())
+        {
+            <li class="list-group-item">
+                <label>Redirect URIs</label>
+                <ul>
+                    @foreach (var uri in client.RedirectUris)
+                    {
+                        <li><code>@uri</code></li>
+                    }
+                </ul>
+            </li>
+        }
+        @if (client.AllowedGrantTypes.Any())
+        {
+            <li class="list-group-item">
+                <label>Grant Types</label>
+                <ul>
+                    @foreach (var gt in client.AllowedGrantTypes)
+                    {
+                        <li>@gt</li>
+                    }
+                </ul>
+            </li>
+        }
+        @if (client.AllowedScopes.Any())
+        {
+            <li class="list-group-item">
+                <label>Scopes</label>
+                <ul>
+                    @foreach (var scope in client.AllowedScopes)
+                    {
+                        <li>@scope</li>
+                    }
+                </ul>
+            </li>
+        }
+        <li class="list-group-item">
+            <label>Registered:</label> @client.Created.ToString("yyyy-MM-dd HH:mm")
+        </li>
+    </ul>
+</div>
