@@ -2,8 +2,12 @@
 # https://agentgateway.dev/
 #
 # Routes:
-#   Public (no auth):     /context7, /travel, /learn, /petstore
+#   Public (no auth):     /context7, /travel, /learn, /petstore,
+#                          /placeholder-public, /weather-public,
+#                          /inspector-public, /shipment
+#   M2M (client_credentials): /inspector-m2m
 #   Protected (OAuth+DCR): /placeholder, /weather, /mixed,
+#                          /inspector, /filtered,
 #                          /b2b/dev/docs, /b2c/travel/booking
 #
 # NOTE: CORS is handled entirely by nginx to avoid duplicate headers
@@ -25,7 +29,12 @@ binds:
     # Public Routes (no authentication)
     # =========================================================================
 
-    # Context7 - Library documentation
+    # ---- context7 ---------------------------------------------------------
+    # Implementation: Single remote MCP backend, no auth, no policies.
+    # Use case:       Proxy to Context7's hosted library-documentation MCP
+    #                 server. Agents can look up docs for any npm/PyPI/etc.
+    #                 package without managing the upstream URL themselves.
+    # -----------------------------------------------------------------------
     - name: context7
       matches:
       - path:
@@ -37,7 +46,12 @@ binds:
             mcp:
               host: https://mcp.context7.com/mcp
 
-    # Kismet Travel
+    # ---- travel -----------------------------------------------------------
+    # Implementation: Single remote MCP backend, no auth, no policies.
+    # Use case:       Proxy to Kismet Travel's public MCP server for flight
+    #                 and hotel search. Shows the gateway as a simple
+    #                 pass-through to an external third-party MCP service.
+    # -----------------------------------------------------------------------
     - name: travel
       matches:
       - path:
@@ -49,7 +63,12 @@ binds:
             mcp:
               host: https://mcp.kismet.travel/mcp
 
-    # Microsoft Learn
+    # ---- learn ------------------------------------------------------------
+    # Implementation: Single remote MCP backend, no auth, no policies.
+    # Use case:       Proxy to Microsoft Learn's official MCP endpoint.
+    #                 Agents can search and retrieve Microsoft documentation
+    #                 (Azure, .NET, etc.) through the gateway.
+    # -----------------------------------------------------------------------
     - name: learn
       matches:
       - path:
@@ -61,10 +80,17 @@ binds:
             mcp:
               host: https://learn.microsoft.com/api/mcp
 
-    # Swagger Petstore - OpenAPI to MCP auto-translation (public, no auth)
-    # Demonstrates automatic REST API → MCP tool conversion using an OpenAPI spec.
-    # Every Petstore endpoint (pet, store, user) becomes an MCP tool automatically.
-    # See: https://agentgateway.dev/docs/mcp/connect/openapi/
+    # ---- petstore ---------------------------------------------------------
+    # Implementation: OpenAPI-to-MCP auto-translation. The gateway reads a
+    #                 local OpenAPI spec file and converts every REST endpoint
+    #                 into an MCP tool automatically -- no custom MCP server
+    #                 code needed. No auth, no policies.
+    # Use case:       Expose the Swagger Petstore REST API (pet, store, user
+    #                 endpoints) as MCP tools. Demonstrates how any existing
+    #                 REST API with an OpenAPI spec can be made available to
+    #                 agents without writing a dedicated MCP server.
+    # See:            https://agentgateway.dev/docs/mcp/connect/openapi/
+    # -----------------------------------------------------------------------
     - name: petstore
       matches:
       - path:
@@ -78,7 +104,13 @@ binds:
                 file: /etc/agentgateway/petstore-openapi.json
               host: https://petstore.swagger.io
 
-    # JSONPlaceholder (public, no auth)
+    # ---- placeholder-public -----------------------------------------------
+    # Implementation: Single local MCP backend (Docker), no auth, no policies.
+    # Use case:       Public, unauthenticated access to the JSONPlaceholder
+    #                 MCP server. Useful as a quick-start for testing tool
+    #                 calls (get_posts, get_users, etc.) without dealing with
+    #                 OAuth flows. Compare with /placeholder (protected).
+    # -----------------------------------------------------------------------
     - name: placeholder-public
       matches:
       - path:
@@ -90,7 +122,12 @@ binds:
             mcp:
               host: http://jsonplaceholder-mcp:8001/mcp
 
-    # Weather (public, no auth)
+    # ---- weather-public ---------------------------------------------------
+    # Implementation: Single local MCP backend (Docker), no auth, no policies.
+    # Use case:       Public, unauthenticated access to the Weather MCP
+    #                 server. Returns mock data unless OPENWEATHERMAP_API_KEY
+    #                 is set. Compare with /weather (protected).
+    # -----------------------------------------------------------------------
     - name: weather-public
       matches:
       - path:
@@ -102,11 +139,109 @@ binds:
             mcp:
               host: http://weather-mcp:8002/mcp
 
+    # ---- inspector-public -------------------------------------------------
+    # Implementation: Single local MCP backend (C# / .NET), no auth, no
+    #                 backendAuth passthrough. The inspector receives no JWT.
+    # Use case:       Baseline for the JWT-passthrough demo. Call the same
+    #                 "inspect" tool here and on /inspector (protected) to
+    #                 see the difference: this route shows empty auth headers,
+    #                 while /inspector shows the decoded JWT claims.
+    # -----------------------------------------------------------------------
+    - name: inspector-public
+      matches:
+      - path:
+          pathPrefix: /inspector-public
+      backends:
+      - mcp:
+          targets:
+          - name: inspector
+            mcp:
+              host: http://inspector-csharp-mcp:8080/mcp
+
+    # ---- shipment ---------------------------------------------------------
+    # Implementation: OpenAPI-to-MCP auto-translation + backendAuth with a
+    #                 file-based bearer token. A sidecar container fetches
+    #                 OAuth2 client_credentials tokens on a loop and writes
+    #                 the raw token to a shared Docker volume. The gateway
+    #                 reads it via `backendAuth: key: file:` and adds a
+    #                 Bearer header on every upstream request automatically.
+    # Use case:       Expose a real third-party REST API (nShift Shipment
+    #                 Data) as MCP tools with gateway-managed auth. Agents
+    #                 never see credentials; the gateway handles token
+    #                 acquisition and refresh transparently.
+    # -----------------------------------------------------------------------
+    - name: shipment
+      matches:
+      - path:
+          pathPrefix: /shipment
+      backends:
+      - mcp:
+          targets:
+          - name: shipment-data
+            openapi:
+              schema:
+                file: /etc/agentgateway/shipment-data-api.json
+              host: https://api.qa.nshiftportal.dev/track/shipmentdata
+      policies:
+        backendAuth:
+          key:
+            file: /shared/shipment-token
+
+    # ---- inspector-m2m ----------------------------------------------------
+    # Implementation: Single local MCP backend (C# inspector) + mcpAuthentication
+    #                 with backendAuth passthrough. Designed for machine-to-machine
+    #                 (M2M) callers that use the OAuth2 client_credentials grant.
+    #                 No user interaction or browser redirect -- the client
+    #                 exchanges its client_id + client_secret directly at the IDP
+    #                 token endpoint and presents the resulting JWT to the gateway.
+    # Use case:       Service-to-service integration where an automated agent
+    #                 or backend service needs to call MCP tools without a human
+    #                 in the loop. The IDP client "m2m-inspector" is registered
+    #                 with GrantTypes.ClientCredentials in Config.cs.
+    # -----------------------------------------------------------------------
+    - name: inspector-m2m
+      matches:
+      - path:
+          pathPrefix: /inspector-m2m
+      - path:
+          exact: /.well-known/oauth-protected-resource/inspector-m2m/mcp
+      backends:
+      - mcp:
+          targets:
+          - name: inspector
+            mcp:
+              host: http://inspector-csharp-mcp:8080/mcp
+      policies:
+        backendAuth:
+          passthrough: {}
+        mcpAuthentication:
+          issuer: https://idp.localhost:8080
+          audiences:
+          - https://gateway.localhost:8080/inspector-m2m/mcp
+          jwks:
+            url: http://idp:5000/.well-known/openid-configuration/jwks
+          resourceMetadata:
+            resource: https://gateway.localhost:8080/inspector-m2m/mcp
+            scopesSupported:
+            - mcp:tools
+            bearerMethodsSupported:
+            - header
+          mode: strict
+
     # =========================================================================
     # Protected Routes (OAuth 2.1 with DCR)
     # =========================================================================
 
-    # JSONPlaceholder MCP Server
+    # ---- placeholder ------------------------------------------------------
+    # Implementation: Single local MCP backend + mcpAuthentication (OAuth 2.1
+    #                 with Dynamic Client Registration). The gateway validates
+    #                 JWTs from the local IDP and enforces the "mcp:tools"
+    #                 scope. No backendAuth -- the upstream MCP server is
+    #                 trusted and receives requests without credentials.
+    # Use case:       Protected access to the JSONPlaceholder MCP server.
+    #                 Demonstrates the standard OAuth-protected single-backend
+    #                 pattern. Compare with /placeholder-public (no auth).
+    # -----------------------------------------------------------------------
     - name: placeholder
       matches:
       - path:
@@ -134,7 +269,14 @@ binds:
             - header
           mode: strict
 
-    # Weather MCP Server
+    # ---- weather ----------------------------------------------------------
+    # Implementation: Single local MCP backend + mcpAuthentication (OAuth 2.1
+    #                 with DCR). Same auth pattern as /placeholder.
+    # Use case:       Protected access to the Weather MCP server. Identical
+    #                 auth setup to /placeholder but pointing at a different
+    #                 backend, showing that each route gets its own audience
+    #                 and resource metadata. Compare with /weather-public.
+    # -----------------------------------------------------------------------
     - name: weather
       matches:
       - path:
@@ -162,7 +304,16 @@ binds:
             - header
           mode: strict
 
-    # Mixed - JSONPlaceholder + Weather
+    # ---- mixed ------------------------------------------------------------
+    # Implementation: Multiple local MCP backends behind a single route +
+    #                 mcpAuthentication. The gateway multiplexes tools/list
+    #                 and tools/call across both backends and prefixes tool
+    #                 names (e.g. jsonplaceholder_get_posts, weather_get_current)
+    #                 to avoid collisions.
+    # Use case:       Fan-out / aggregation pattern. A single authenticated
+    #                 endpoint gives agents access to tools from two different
+    #                 MCP servers, demonstrating backend multiplexing.
+    # -----------------------------------------------------------------------
     - name: mixed
       matches:
       - path:
@@ -193,7 +344,114 @@ binds:
             - header
           mode: strict
 
-    # B2B Dev Docs - Microsoft Learn + JSONPlaceholder
+    # ---- inspector --------------------------------------------------------
+    # Implementation: Single local MCP backend (C# / .NET) + mcpAuthentication
+    #                 + backendAuth passthrough. The gateway validates the JWT
+    #                 and then forwards it to the upstream MCP server as-is in
+    #                 the Authorization header.
+    # Use case:       JWT passthrough demo. The C# inspector decodes and
+    #                 returns the token claims, proving the backend received
+    #                 the original client JWT. Compare with /inspector-public
+    #                 (no JWT) to see the difference.
+    # -----------------------------------------------------------------------
+    - name: inspector
+      matches:
+      - path:
+          pathPrefix: /inspector
+      - path:
+          exact: /.well-known/oauth-protected-resource/inspector/mcp
+      backends:
+      - mcp:
+          targets:
+          - name: inspector
+            mcp:
+              host: http://inspector-csharp-mcp:8080/mcp
+      policies:
+        backendAuth:
+          passthrough: {}
+        mcpAuthentication:
+          issuer: https://idp.localhost:8080
+          audiences:
+          - https://gateway.localhost:8080/inspector/mcp
+          jwks:
+            url: http://idp:5000/.well-known/openid-configuration/jwks
+          resourceMetadata:
+            resource: https://gateway.localhost:8080/inspector/mcp
+            scopesSupported:
+            - mcp:tools
+            bearerMethodsSupported:
+            - header
+          mode: strict
+
+    # ---- filtered ---------------------------------------------------------
+    # Implementation: Multiple local MCP backends + mcpAuthentication +
+    #                 backendAuth passthrough + mcpAuthorization with CEL
+    #                 rules. Three backends are aggregated, but tool-level
+    #                 CEL rules (OR logic) whitelist exactly one tool per
+    #                 backend. Rules use mcp.tool.name (unprefixed original
+    #                 name) and mcp.tool.target to disambiguate.
+    # Use case:       Fine-grained tool filtering. Shows how to expose a
+    #                 curated subset of tools from multiple backends behind
+    #                 a single route. Useful for role-based or context-based
+    #                 tool access control.
+    # Note:           Multiplexed routes only support tools, not resources or
+    #                 prompts (agentgateway limitation). MCP Inspector may
+    #                 show 500 errors for resources/list -- these are expected.
+    # -----------------------------------------------------------------------
+    - name: filtered
+      matches:
+      - path:
+          pathPrefix: /filtered
+      - path:
+          exact: /.well-known/oauth-protected-resource/filtered/mcp
+      backends:
+      - mcp:
+          targets:
+          - name: jsonplaceholder
+            mcp:
+              host: http://jsonplaceholder-mcp:8001/mcp
+          - name: weather
+            mcp:
+              host: http://weather-mcp:8002/mcp
+          - name: inspector
+            mcp:
+              host: http://inspector-csharp-mcp:8080/mcp
+      policies:
+        backendAuth:
+          passthrough: {}
+        mcpAuthentication:
+          issuer: https://idp.localhost:8080
+          audiences:
+          - https://gateway.localhost:8080/filtered/mcp
+          jwks:
+            url: http://idp:5000/.well-known/openid-configuration/jwks
+          resourceMetadata:
+            resource: https://gateway.localhost:8080/filtered/mcp
+            scopesSupported:
+            - mcp:tools
+            bearerMethodsSupported:
+            - header
+          mode: strict
+        # Tool filtering using CEL rules (OR logic: any match allows access).
+        # We use both mcp.tool.name and mcp.tool.target for clarity and to
+        # demonstrate disambiguation when multiple backends expose tools
+        # with the same name.
+        mcpAuthorization:
+          rules:
+          - 'mcp.tool.name == "get_posts" && mcp.tool.target == "jsonplaceholder"'
+          - 'mcp.tool.name == "get_current" && mcp.tool.target == "weather"'
+          - 'mcp.tool.name == "inspect" && mcp.tool.target == "inspector"'
+
+    # ---- b2b-dev-docs -----------------------------------------------------
+    # Implementation: Multiple backends (one remote, one local) behind a
+    #                 single route + mcpAuthentication. Demonstrates mixing
+    #                 an external public MCP server (Microsoft Learn) with a
+    #                 local one (JSONPlaceholder) in one authenticated endpoint.
+    # Use case:       B2B developer-docs scenario. An internal dev portal
+    #                 aggregates Microsoft documentation tools alongside an
+    #                 internal API, all behind a single OAuth-protected path
+    #                 scoped under /b2b/dev/docs (nested route prefix).
+    # -----------------------------------------------------------------------
     - name: b2b-dev-docs
       matches:
       - path:
@@ -224,7 +482,16 @@ binds:
             - header
           mode: strict
 
-    # B2C Travel Booking - Weather + Kismet Travel
+    # ---- b2c-travel-booking -----------------------------------------------
+    # Implementation: Multiple backends (one local, one remote) behind a
+    #                 single route + mcpAuthentication. Same multiplexing
+    #                 pattern as /mixed but with a nested path prefix and
+    #                 different backends.
+    # Use case:       B2C travel-booking scenario. A consumer-facing app
+    #                 combines weather forecasts with flight/hotel search in
+    #                 one authenticated endpoint, illustrating a domain-
+    #                 specific agent toolset behind /b2c/travel/booking.
+    # -----------------------------------------------------------------------
     - name: b2c-travel-booking
       matches:
       - path:

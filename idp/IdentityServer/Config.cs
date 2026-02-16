@@ -77,6 +77,18 @@ public static class Config
         {
             Scopes = { "mcp:tools" }
         },
+        new("https://gateway.localhost:8080/inspector/mcp", "Inspector MCP")
+        {
+            Scopes = { "mcp:tools" }
+        },
+        new("https://gateway.localhost:8080/filtered/mcp", "Filtered MCP")
+        {
+            Scopes = { "mcp:tools" }
+        },
+        new("https://gateway.localhost:8080/inspector-m2m/mcp", "Inspector M2M MCP")
+        {
+            Scopes = { "mcp:tools" }
+        },
     ];
 
     public static IEnumerable<ApiScope> ApiScopes =>
@@ -98,6 +110,23 @@ public static class Config
             AllowedScopes = { "openid", "profile", "email" },
             AlwaysIncludeUserClaimsInIdToken = true,
             Enabled = true
+        },
+        // Machine-to-machine client for the inspector-m2m route.
+        // Supports both client_credentials (headless M2M) and authorization_code
+        // (interactive, e.g. MCP Inspector UI) grant types.
+        new Client
+        {
+            ClientId = "m2m-inspector",
+            ClientName = "M2M Inspector Client",
+            ClientSecrets = { new Secret("m2m-inspector-secret".Sha256()) },
+            AllowedGrantTypes = { GrantType.ClientCredentials, GrantType.AuthorizationCode },
+            RequirePkce = false,
+            RedirectUris =
+            {
+                "http://localhost:6274/oauth/callback",
+                "http://localhost:6274/oauth/callback/debug"
+            },
+            AllowedScopes = { "openid", "profile", "mcp:tools" }
         }
     ];
 }

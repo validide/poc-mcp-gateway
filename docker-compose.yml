@@ -43,10 +43,14 @@ services:
     volumes:
       - ./gateway/config.yaml:/etc/agentgateway/config.yaml:ro
       - ./gateway/petstore-openapi.json:/etc/agentgateway/petstore-openapi.json:ro
+      - ./gateway/shipment-data-api.json:/etc/agentgateway/shipment-data-api.json:ro
+      - shipment-token:/shared:ro
     command: ["-f", "/etc/agentgateway/config.yaml"]
     depends_on:
       idp:
         condition: service_healthy
+      shipment-token-refresh:
+        condition: service_started
     networks:
       - mcp-demo-network
     # Note: AgentGateway uses a minimal container without curl/wget/sh
@@ -117,6 +121,8 @@ services:
       jsonplaceholder-mcp:
         condition: service_healthy
       weather-mcp:
+        condition: service_healthy
+      inspector-csharp-mcp:
         condition: service_healthy
       mcp-inspector:
         condition: service_healthy
@@ -197,6 +203,56 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  # C# Inspector MCP Server (request introspection + JWT decoding)
+  inspector-csharp-mcp:
+    build:
+      context: ./mcp-servers/inspector
+      dockerfile: Dockerfile
+    image: mcp-inspector-csharp:latest
+    container_name: inspector-csharp-mcp
+    restart: unless-stopped
+    ports:
+      - "8003:8080"
+    networks:
+      - mcp-demo-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Token refresh sidecar for Shipment Data API
+  # Fetches OAuth2 client_credentials token and writes to shared volume
+  shipment-token-refresh:
+    build:
+      context: ./mcp-servers/token-refresh
+      dockerfile: Dockerfile
+    image: mcp-token-refresh:latest
+    container_name: shipment-token-refresh
+    restart: unless-stopped
+    volumes:
+      - shipment-token:/shared
+    environment:
+      TOKEN_URL: ${SHIPMENT_TOKEN_URL:-}
+      CLIENT_ID: ${SHIPMENT_CLIENT_ID:-}
+      CLIENT_SECRET: ${SHIPMENT_CLIENT_SECRET:-}
+      SCOPE: ${SHIPMENT_SCOPE:-}
+      TOKEN_FILE: /shared/shipment-token
+      REFRESH_INTERVAL: "300"
+    networks:
+      - mcp-demo-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 32M
+
   # MCP Inspector
   mcp-inspector:
     image: ghcr.io/modelcontextprotocol/inspector:latest
@@ -226,6 +282,7 @@ services:
 
 volumes:
   idp-data:
+  shipment-token:
 
 networks:
   mcp-demo-network:
